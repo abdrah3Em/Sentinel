@@ -1,0 +1,273 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Sentinel — Command Guard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;650;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/static/styles.css">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23111827' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z'/%3E%3C/svg%3E">
+<script>
+  // Apply the saved theme before first paint to avoid a flash.
+  try { const t = new URLSearchParams(location.search).get('theme') || localStorage.getItem('sentinel-theme');
+    if (t === 'dark' || (!t && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.dataset.theme = 'dark'; } catch (e) {}
+</script>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <symbol id="i-grid" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z"/><path d="M12 9v4M12 17h.01"/></symbol>
+  <symbol id="i-list" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4l14 8-14 8z"/></symbol>
+  <symbol id="i-rules" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 21h16M4 3h16M9 7v10M15 7v10M9 12h6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></symbol>
+  <symbol id="i-reset" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/></symbol>
+  <symbol id="i-pump" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="8"/><path d="M12 12V6M12 12l4 3"/></symbol>
+  <symbol id="i-valve" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8l8 4-8 4zM20 8l-8 4 8 4zM12 12V5M9 5h6"/></symbol>
+  <symbol id="i-mode" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6h10M18 6h2M4 12h2M10 12h10M4 18h10M18 18h2"/><circle cx="16" cy="6" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="18" r="2"/></symbol>
+  <symbol id="i-download" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v12M6 11l6 6 6-6M4 21h16"/></symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z"/></symbol>
+</svg>
+
+<div class="app">
+  <!-- ============================================================ sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <div class="brand-mark"><svg><use href="#i-shield"/></svg></div>
+      <div><div class="brand-name">Sentinel</div><div class="brand-sub">Command Guard</div></div>
+    </div>
+    <nav class="nav">
+      <div class="nav-label">Monitor</div>
+      <a href="#overview" data-view="overview"><svg><use href="#i-grid"/></svg>Overview</a>
+      <a href="#advisories" data-view="advisories"><svg><use href="#i-alert"/></svg>Advisories<span class="count" id="nav-alerts">0</span></a>
+      <a href="#timeline" data-view="timeline"><svg><use href="#i-list"/></svg>Timeline</a>
+      <div class="nav-label">Operate</div>
+      <a href="#scenarios" data-view="scenarios"><svg><use href="#i-play"/></svg>Scenarios</a>
+      <a href="#rules" data-view="rules"><svg><use href="#i-rules"/></svg>Detection rules</a>
+    </nav>
+    <div class="sidebar-foot">
+      <div class="link-row"><span class="dot" id="dot-stream"></span><span id="txt-stream">Connecting…</span></div>
+      <div class="link-row"><span class="dot" id="dot-telemetry"></span><span id="txt-telemetry">Telemetry —</span></div>
+      <div class="link-row faint">Water treatment skid · simulated</div>
+    </div>
+  </aside>
+
+  <!-- ============================================================ main -->
+  <div class="main">
+    <header class="topbar">
+      <h1 id="page-title">Overview</h1>
+      <div class="topbar-right">
+        <span class="pill" id="pill-live"><span class="dot"></span><span>Live</span></span>
+        <span class="pill" id="pill-telemetry"><span>Telemetry</span><b id="tel-age">—</b><span class="faint">·</span><span>seq</span><b id="tel-seq">—</b></span>
+        <span class="pill mono" id="clock">--:--:--</span>
+        <button class="btn icon" id="theme" title="Toggle theme"><svg><use href="#i-moon"/></svg></button>
+        <button class="btn" id="reset"><svg><use href="#i-reset"/></svg>Reset demo</button>
+      </div>
+    </header>
+
+    <div class="content">
+      <!-- ---------------------------------------------------- overview -->
+      <section class="view" id="view-overview">
+        <div class="card posture" id="posture">
+          <div>
+            <div class="eyebrow">Security posture</div>
+            <div class="posture-title"><span class="badge lg NORMAL" id="p-badge">Normal</span><h2 id="p-headline">No unsafe command detected</h2></div>
+            <div class="posture-sub" id="p-sub">Every consequential command is checked against live process state, command history, operating context and telemetry integrity.</div>
+          </div>
+          <div>
+            <div class="eyebrow">Risk score</div>
+            <div class="score-row"><span class="score" id="p-score">0</span><span class="score-of">/ 100</span></div>
+            <div class="scale" id="p-scale"><span></span><span></span><span></span><span></span><i></i></div>
+            <div class="scale-labels"><span>Low</span><span>Medium</span><span>High</span><span>Critical</span></div>
+          </div>
+          <div class="posture-stats">
+            <div class="stat"><span class="eyebrow">Operating context</span><b id="p-ctx">—</b></div>
+            <div class="stat"><span class="eyebrow">Telemetry integrity</span><b id="p-tel">—</b></div>
+            <div class="stat"><span class="eyebrow">Commands evaluated</span><b id="p-cmds">0</b></div>
+            <div class="stat"><span class="eyebrow">Advisories raised</span><b id="p-alerts">0</b></div>
+          </div>
+        </div>
+
+        <div class="kpis">
+          <div class="card kpi" id="kpi-level" style="color:var(--c-level)">
+            <div class="kpi-top"><span class="eyebrow">Tank level</span><span class="badge ok" id="kpi-level-badge">Nominal</span></div>
+            <div class="kpi-val"><b id="v-level">—</b><span>%</span></div>
+            <svg id="sp-level" viewBox="0 0 100 30" preserveAspectRatio="none"></svg>
+            <div class="kpi-foot" id="kpi-level-foot">Setpoint — · band 20–90 %</div>
+          </div>
+          <div class="card kpi" id="kpi-pressure" style="color:var(--c-pressure)">
+            <div class="kpi-top"><span class="eyebrow">Discharge pressure</span><span class="badge ok" id="kpi-pressure-badge">Nominal</span></div>
+            <div class="kpi-val"><b id="v-pressure">—</b><span>bar</span></div>
+            <svg id="sp-pressure" viewBox="0 0 100 30" preserveAspectRatio="none"></svg>
+            <div class="kpi-foot">Limit 5.0 bar · shut-off head 6.4 bar</div>
+          </div>
+          <div class="card kpi" id="kpi-flow" style="color:var(--c-flow)">
+            <div class="kpi-top"><span class="eyebrow">Discharge flow</span><span class="badge ok" id="kpi-flow-badge">Nominal</span></div>
+            <div class="kpi-val"><b id="v-flow">—</b><span>L/min</span></div>
+            <svg id="sp-flow" viewBox="0 0 100 30" preserveAspectRatio="none"></svg>
+            <div class="kpi-foot" id="kpi-flow-foot">Expected — L/min from physics</div>
+          </div>
+          <div class="card kpi" id="kpi-setpoint" style="color:var(--c-setpoint)">
+            <div class="kpi-top"><span class="eyebrow">Level setpoint</span><span class="badge" id="kpi-sp-badge">AUTO</span></div>
+            <div class="kpi-val"><b id="v-setpoint">—</b><span>%</span></div>
+            <svg id="sp-setpoint" viewBox="0 0 100 30" preserveAspectRatio="none"></svg>
+            <div class="kpi-foot">Safe band 20–90 % · normal trim ±5 %</div>
+          </div>
+        </div>
+
+        <div class="card equipment">
+          <div><div class="eq-icon" id="eq-pump-i"><svg><use href="#i-pump"/></svg></div><div><div class="eq-name">Pump P-101</div><div class="eq-state" id="eq-pump">—</div></div></div>
+          <div><div class="eq-icon" id="eq-outlet-i"><svg><use href="#i-valve"/></svg></div><div><div class="eq-name">Outlet valve V-102</div><div class="eq-state" id="eq-outlet">—</div></div></div>
+          <div><div class="eq-icon" id="eq-inlet-i"><svg><use href="#i-valve"/></svg></div><div><div class="eq-name">Inlet valve V-101</div><div class="eq-state" id="eq-inlet">—</div></div></div>
+          <div><div class="eq-icon" id="eq-mode-i"><svg><use href="#i-mode"/></svg></div><div><div class="eq-name">Operating mode</div><div class="eq-state" id="eq-mode">—</div></div></div>
+        </div>
+
+        <div class="row-2">
+          <div class="card">
+            <div class="card-head"><h3>Process</h3><span class="sub">Tank → pump → discharge</span></div>
+            <div class="card-body">
+              <svg id="mimic" class="mimic" viewBox="0 0 620 340">
+                <path class="pipe" d="M30 70 H150"/><path class="pipe flowline" id="pipe-inlet" d="M30 70 H150"/>
+                <text class="lbl left" x="30" y="56">SUPPLY</text>
+                <g id="valve-inlet" class="valve"><rect x="83" y="57" width="26" height="26" rx="4"/><path class="x" d="M89 63l14 14M103 63l-14 14"/><text class="lbl" x="96" y="100">V-101</text></g>
+
+                <rect class="tank-body" x="150" y="40" width="170" height="200" rx="8"/>
+                <clipPath id="tankClip"><rect x="151" y="41" width="168" height="198" rx="7"/></clipPath>
+                <g clip-path="url(#tankClip)">
+                  <rect id="tank-fill" class="tank-fill" x="151" y="140" width="168" height="100"/>
+                  <rect id="tank-surface" class="tank-surface" x="151" y="140" width="168" height="3"/>
+                </g>
+                <line class="limit" id="line-hi" x1="150" x2="320" y1="61.6" y2="61.6"/><text class="limit-lbl" id="lbl-hi" x="328" y="64.6">HI 90</text>
+                <line class="limit" id="line-lo" x1="150" x2="320" y1="198.8" y2="198.8"/><text class="limit-lbl" id="lbl-lo" x="328" y="201.8">LO 20</text>
+                <line class="sp" id="line-sp" x1="150" x2="320" y1="120.4" y2="120.4"/><text class="limit-lbl sp" id="lbl-sp" x="328" y="123.4">SP</text>
+                <text class="lbl" x="235" y="30">TANK T-101</text>
+                <text class="read" id="tank-read" x="235" y="150">—</text>
+
+                <path class="pipe" d="M235 240 V285 H360"/><path class="pipe flowline" id="pipe-suction" d="M235 240 V285 H360"/>
+                <g id="pump" class="pump"><circle cx="390" cy="285" r="25"/><path class="impeller" id="impeller" d="M390 268 L390 285 L405 294"/><text class="lbl" x="390" y="328">PUMP P-101</text></g>
+
+                <path class="pipe" d="M416 285 H500 V150 H575"/><path class="pipe flowline" id="pipe-discharge" d="M416 285 H500 V150 H575"/>
+                <path id="deadhead-zone" class="deadhead" d="M416 285 H500 V212"/>
+                <g id="valve-outlet" class="valve"><rect x="487" y="197" width="26" height="26" rx="4"/><path class="x" d="M493 203l14 14M507 203l-14 14"/><text class="lbl" x="500" y="240">V-102</text></g>
+                <text class="lbl left" x="540" y="138">DISCHARGE</text>
+                <path id="arrow-out" class="arrow" d="M578 150 l-12 -6 v12 z"/>
+
+                <g class="gauge" id="gauge-pt"><circle cx="500" cy="100" r="23"/><text class="gv" id="pt-value" x="500" y="104">—</text><text class="lbl" x="500" y="68">PT-101 bar</text></g>
+                <g class="gauge" id="gauge-ft"><circle cx="575" cy="240" r="23"/><text class="gv" id="ft-value" x="575" y="244">—</text><text class="lbl" x="575" y="208">FT-101 L/min</text></g>
+              </svg>
+              <div class="mimic-note" id="mimic-note">Waiting for telemetry…</div>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Latest advisory</h3><span class="sub" id="adv-ov-sub"></span><div class="right"><a href="#advisories" class="btn sm">View all</a></div></div>
+            <div class="card-body" id="adv-overview"></div>
+          </div>
+        </div>
+
+        <div class="row-2">
+          <div class="card">
+            <div class="card-head"><h3>Process trend</h3><span class="sub">last 2 minutes · real time</span>
+              <div class="right legend"><span style="--c:var(--c-level)">Level %</span><span style="--c:var(--c-flow)">Flow L/min</span><span style="--c:var(--c-pressure)">Pressure bar</span><span style="--c:var(--c-setpoint)">Setpoint</span></div></div>
+            <div class="card-body chart-host" id="chart-host"><svg id="chart"></svg><div class="chart-tip" id="chart-tip" hidden></div></div>
+          </div>
+          <div class="card">
+            <div class="card-head"><h3>Recent activity</h3><div class="right"><a href="#timeline" class="btn sm">Full timeline</a></div></div>
+            <div class="table-wrap"><table class="table" id="tbl-recent"><tbody></tbody></table></div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- advisories -->
+      <section class="view" id="view-advisories" hidden>
+        <div class="toolbar">
+          <div class="chips" id="sev-filters">
+            <button class="chip active" data-sev="all">All</button>
+            <button class="chip" data-sev="CRITICAL">Critical</button>
+            <button class="chip" data-sev="HIGH">High</button>
+            <button class="chip" data-sev="MEDIUM">Medium</button>
+            <button class="chip" data-sev="LOW">Low</button>
+          </div>
+          <div class="right"><span class="muted" id="adv-count"></span><a class="btn" href="/api/export/alerts.csv"><svg><use href="#i-download"/></svg>Export CSV</a></div>
+        </div>
+        <div class="split">
+          <div class="card"><div class="table-wrap tall"><table class="table" id="tbl-alerts">
+            <thead><tr><th>Time</th><th>Severity</th><th>Rule</th><th>Summary</th><th>Score</th><th>Source</th><th>Context</th></tr></thead><tbody></tbody></table></div></div>
+          <div class="card sticky"><div class="card-head"><h3>Advisory detail</h3></div><div class="card-body" id="adv-detail"></div></div>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- timeline -->
+      <section class="view" id="view-timeline" hidden>
+        <div class="toolbar">
+          <div class="chips" id="tl-filters">
+            <button class="chip active" data-f="all">All</button>
+            <button class="chip" data-f="alert">Advisories</button>
+            <button class="chip" data-f="cmd">Commands</button>
+            <button class="chip" data-f="physical">Process</button>
+            <button class="chip" data-f="demo">Scenarios</button>
+          </div>
+          <div class="right"><input class="input search" id="tl-search" placeholder="Search events…"><span class="muted" id="tl-count"></span></div>
+        </div>
+        <div class="card"><div class="table-wrap tall"><table class="table" id="tbl-timeline">
+          <thead><tr><th>Time</th><th>Type</th><th>Event</th><th>Source</th><th>Verdict</th></tr></thead><tbody></tbody></table></div></div>
+      </section>
+
+      <!-- ---------------------------------------------------- scenarios -->
+      <section class="view" id="view-scenarios" hidden>
+        <div class="notice"><svg width="16" height="16"><use href="#i-alert"/></svg><span>Scenarios send protocol-valid MQTT commands to the local simulator only. Sentinel observes and advises; it never actuates the plant.</span></div>
+        <div class="scenario-grid" id="scenario-grid"></div>
+        <div class="card">
+          <div class="card-head"><h3>Operator console</h3><span class="sub">issue a real command — the guard evaluates it like any other</span></div>
+          <div class="card-body" style="display:flex;flex-direction:column;gap:14px">
+            <div class="ops-grid">
+              <button class="btn" data-cmd="pump_start">Pump start</button>
+              <button class="btn" data-cmd="pump_stop">Pump stop</button>
+              <button class="btn" data-cmd="outlet_open">Outlet open</button>
+              <button class="btn" data-cmd="outlet_close">Outlet close</button>
+              <button class="btn" data-cmd="inlet_open">Inlet open</button>
+              <button class="btn" data-cmd="inlet_close">Inlet close</button>
+              <button class="btn" data-cmd="maintenance_on">Maintenance on</button>
+              <button class="btn" data-cmd="maintenance_off">Maintenance off</button>
+            </div>
+            <div class="form-row">
+              <label>Setpoint <input class="input" id="sp" type="number" value="60" min="0" max="100" step="1" style="width:80px"></label>
+              <button class="btn" data-cmd="setpoint">Apply setpoint</button>
+              <label style="margin-left:auto">Source
+                <select class="select" id="source">
+                  <option value="operator-hmi">operator-hmi · trusted</option>
+                  <option value="maintenance-hmi">maintenance-hmi</option>
+                  <option value="maintenance-laptop">maintenance-laptop</option>
+                  <option value="unknown-host">unknown-host</option>
+                </select>
+              </label>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ---------------------------------------------------- rules -->
+      <section class="view" id="view-rules" hidden>
+        <div class="card">
+          <div class="card-head"><h3>Operating policy</h3><span class="sub">what the system does when it is unsure</span></div>
+          <div class="card-body policy" id="policy"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Risk model</h3><span class="sub">score = Σ finding weights, clamped 0–100</span></div>
+          <div class="card-body threshold-grid" id="thresholds"></div>
+        </div>
+        <div class="card">
+          <div class="card-head"><h3>Detection rules</h3><span class="sub" id="rules-count"></span></div>
+          <div class="table-wrap"><table class="table" id="tbl-rules">
+            <thead><tr><th>Rule</th><th>Layer</th><th>Advisory</th><th>Fires when</th><th>Contributions</th></tr></thead><tbody></tbody></table></div>
+        </div>
+      </section>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
+<script src="/static/app.js"></script>
+</body>
+</html>

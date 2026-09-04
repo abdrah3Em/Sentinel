@@ -1,0 +1,27 @@
+# One-command demo environment:  docker compose up  ->  http://localhost:8080
+services:
+  broker:
+    image: eclipse-mosquitto:2
+    command: mosquitto -c /mosquitto/config/mosquitto.conf
+    volumes:
+      - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    ports: ["1883:1883"]
+
+  plant:
+    build: .
+    command: python -m sentinel.plant.run
+    environment: [SENTINEL_MQTT_HOST=broker]
+    depends_on: [broker]
+
+  guard:
+    build: .
+    command: python -m sentinel.guard.run
+    environment: [SENTINEL_MQTT_HOST=broker]
+    depends_on: [broker]
+
+  dashboard:
+    build: .
+    command: python -m sentinel.api.app
+    environment: [SENTINEL_MQTT_HOST=broker]
+    ports: ["8080:8080"]
+    depends_on: [broker, plant, guard]
