@@ -313,7 +313,7 @@ function renderTables() {
   if (S.view === 'overview') {
     const tb = $('tbl-recent').querySelector('tbody');
     const keep = rows.slice(0, 9);
-    tb.innerHTML = keep.length ? keep.map((r) => `<tr class="${r.alert ? 'click' : ''}"><td class="t">${fmtTime(r.ts)}</td><td>${r.type}</td><td class="msg">${esc(r.text)}</td></tr>`).join('')
+    tb.innerHTML = keep.length ? keep.map((r) => `<tr class="${r.alert ? 'click' : ''}"><td class="t">${fmtTime(r.ts)}</td><td>${esc(r.type)}</td><td class="msg">${esc(r.text)}</td></tr>`).join('')
       : `<tr><td class="empty">No activity yet</td></tr>`;
     [...tb.children].forEach((tr, i) => { if (keep[i]?.alert) tr.onclick = () => selectAlert(keep[i].alert); });
   }
@@ -322,7 +322,7 @@ function renderTables() {
     const keep = rows.filter((r) => (S.tlFilter === 'all' || r.kind === S.tlFilter) && (!q || (r.q + ' ' + r.source).toLowerCase().includes(q))).slice(0, 400);
     $('tl-count').textContent = `${keep.length} events`;
     const tb = $('tbl-timeline').querySelector('tbody');
-    tb.innerHTML = keep.length ? keep.map((r) => `<tr class="${r.alert ? 'click' : ''}"><td class="t" title="${esc(fmtFull(r.ts))}">${fmtTime(r.ts, true)}</td><td>${r.type}</td><td class="msg">${esc(r.text)}</td><td class="src">${esc(r.source)}</td><td>${r.verdict || ''}</td></tr>`).join('')
+    tb.innerHTML = keep.length ? keep.map((r) => `<tr class="${r.alert ? 'click' : ''}"><td class="t" title="${esc(fmtFull(r.ts))}">${fmtTime(r.ts, true)}</td><td>${esc(r.type)}</td><td class="msg">${esc(r.text)}</td><td class="src">${esc(r.source)}</td><td>${esc(r.verdict || '')}</td></tr>`).join('')
       : `<tr><td colspan="5" class="empty">Nothing matches</td></tr>`;
     [...tb.children].forEach((tr, i) => { if (keep[i]?.alert) tr.onclick = () => { selectAlert(keep[i].alert); location.hash = '#advisories'; }; });
   }
@@ -342,7 +342,7 @@ function renderTables() {
 
 /* ================================================================ render: scenarios & rules */
 function renderScenarios() {
-  $('scenario-grid').innerHTML = S.scenarios.map((s) => `<div class="card scenario" data-id="${s.id}">
+  $('scenario-grid').innerHTML = S.scenarios.map((s) => `<div class="card scenario" data-id="${esc(s.id)}">
     <div class="sc-head">${badge(s.kind === 'attack' ? 'crit' : 'ok', s.kind === 'attack' ? 'Attack' : 'Legitimate')}<h4>${esc(s.title)}</h4></div>
     <p>${esc(s.narrative)}</p>
     <div class="expect"><b>Expected:</b> ${esc(s.expect)}</div>

@@ -36,6 +36,14 @@ DB_PATH = os.environ.get(
 )
 
 # --------------------------------------------------------------------------
+# Notifications / Dispatcher (Field Engineer Alerts)
+# --------------------------------------------------------------------------
+WEBHOOK_URL = os.environ.get("SENTINEL_WEBHOOK_URL", "")
+TELEGRAM_BOT_TOKEN = os.environ.get("SENTINEL_TELEGRAM_BOT_TOKEN", "")
+TELEGRAM_CHAT_ID = os.environ.get("SENTINEL_TELEGRAM_CHAT_ID", "")
+DISPATCH_MIN_LEVEL = os.environ.get("SENTINEL_DISPATCH_MIN_LEVEL", "HIGH")
+
+# --------------------------------------------------------------------------
 # Process simulation
 # --------------------------------------------------------------------------
 TELEMETRY_PERIOD_S = 0.5          # 2 Hz telemetry, per PRD section 12
