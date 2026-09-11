@@ -11,7 +11,7 @@ from typing import Any, Callable, Deque, Optional
 
 from .. import config
 from ..models import Alert, Command, Event, Telemetry, now_ms
-from . import risk, rules
+from . import dispatcher, risk, rules
 from .state import ProcessState
 
 CONSEQUENTIAL = {"pump_start", "pump_stop", "outlet_open", "outlet_close",
@@ -131,6 +131,7 @@ class CommandGuard:
             alert.ts = int(now * 1000)
         self.alerts.append(alert)
         self.on_alert(alert)
+        dispatcher.dispatch_alert(alert)
 
     def _record_assessment(self, command: Command, findings: list, total: int,
                            verdict: str, summary: str, now: float) -> None:

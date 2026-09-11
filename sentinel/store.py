@@ -6,6 +6,7 @@ timeline, the risk trend and CSV export without becoming a database project.
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 import threading
 from typing import Any, Optional
@@ -44,8 +45,9 @@ CREATE INDEX IF NOT EXISTS idx_events_ts ON events(ts);
 class Store:
     def __init__(self, path: Optional[str] = None) -> None:
         self.path = path or config.DB_PATH
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
         self.lock = threading.Lock()
-        self.db = sqlite3.connect(self.path, check_same_thread=False)
+        self.db = sqlite3.connect(self.path, timeout=10.0, check_same_thread=False)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA journal_mode=WAL")
         self.db.executescript(SCHEMA)
