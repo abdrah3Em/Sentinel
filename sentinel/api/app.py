@@ -230,6 +230,9 @@ def api_reset():
     dashboard.events.clear()
     dashboard.assessments.clear()
     dashboard.store.clear()
+    dashboard.status = {"status": "NORMAL", "level": "NORMAL", "risk_score": 0,
+                        "headline": "No unsafe command detected", "telemetry_fresh": True}
+    dashboard.hub.broadcast("status", dashboard.status)
     dashboard.hub.broadcast("reset", {"ts": now_ms()})
     return jsonify({"ok": True})
 

@@ -12,6 +12,8 @@ import time
 
 import pytest
 
+pytest.importorskip("paho.mqtt")
+
 from sentinel import config
 from sentinel.bus import Bus
 from sentinel.guard.run import GuardService
