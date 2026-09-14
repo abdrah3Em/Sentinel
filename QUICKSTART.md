@@ -15,8 +15,9 @@ file is the run book.
 ![Sentinel overview during the flagship attack](docs/img/ui-overview.png)
 
 The dashboard has five views — **Overview**, **Advisories**, **Timeline**, **Scenarios**
-and **Detection rules** — with light and dark themes (toggle in the top bar, or
-`?theme=dark`). All timestamps are wall-clock: the simulator integrates physics over
+and **Detection rules** — a sidebar console built on the design tokens in `design-sentinel/`,
+dark by default with a light theme (toggle in the top bar, or `?theme=light`). All
+timestamps are wall-clock: the simulator integrates physics over
 real elapsed time, so pump runtimes, dead-head durations and the trend axis are real
 seconds.
 

@@ -303,7 +303,7 @@ advisories.
 | Language | Python 3.10+ | simulator, guard, API, scenarios, tests |
 | Transport | **MQTT** (Eclipse Mosquitto) | pub/sub, trivially observable, trivially attackable |
 | Web backend | Flask | REST + server-sent events |
-| Frontend | HTML / CSS / vanilla JS | no build step; light and dark themes |
+| Frontend | HTML / CSS / vanilla JS | no build step; dark and light themes on the `design-sentinel/` tokens |
 | History | SQLite | telemetry, commands, advisories, events |
 | Packaging | `run.sh` and Docker Compose | judge runs one command |
 | Tests | pytest | unit, acceptance, live-broker integration |
@@ -736,7 +736,7 @@ Risk                                          0   no advisory
 
 # 27. User Interface
 
-Five views in a sidebar application shell (light and dark themes):
+Five views in a sidebar application shell (dark and light themes, `design-sentinel/` tokens):
 
 **Overview** — security posture strip (severity, headline, score on a banded
 scale, context, telemetry integrity), KPI cards (busbar voltage, hospital bus
