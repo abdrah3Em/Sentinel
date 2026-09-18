@@ -8,7 +8,7 @@ it never operates switchgear. Demo script: [docs/DEMO.md](docs/DEMO.md). Numbers
 
 ## 1. Run it
 
-### Option A — Docker (what the judges type)
+### Option A — Docker
 
 ```bash
 git clone https://github.com/abdrah3Em/Sentinel.git && cd Sentinel && docker compose up
@@ -182,12 +182,12 @@ See [docs/DECISIONS.md](docs/DECISIONS.md) for the log. The short list:
 
 - **The guard has no write path.** It subscribes and publishes advisories;
   `tests/test_grid_acceptance.py::test_guard_never_operates_switchgear` pins this.
-- **Deterministic before clever.** Additive weights a judge can follow; the learned
+- **Deterministic before clever.** Additive weights an engineer can follow; the learned
   baseline only adds a small, explained contribution.
 - **Controller restart ≠ replay.** A lower sequence number with a *newer* timestamp is a
   counter restart; only an older timestamp counts as replay.
 - **Instrument lag is not an anomaly.** The physics-residual rule needs the mismatch to persist.
 - **Escalation re-alerts immediately.** A persisting condition re-alerts every 30 s — unless
   its severity rises, in which case the engineer hears about it at once.
-- **A real plant has no narrator.** Scenario narration is off on the operator timeline in
-  judge mode and lives in the director panel.
+- **A real plant has no narrator.** Scenario narration is off on the operator timeline by
+  default and lives in the presenter's director panel.

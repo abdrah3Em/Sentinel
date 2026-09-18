@@ -77,7 +77,6 @@ def run_headless() -> Script:
             f"cb_closed={t.cb_closed} b3={t.supplied['b3']}")
 
     # 3. The flagship: a valid cb_close before the fault is cleared.
-    before = len(rig.guard.alerts)
     alert = rig.send("cb_close", source=ATTACKER, settle=0)
     ok = alert is not None and alert.rule == "STATE-001" and alert.level == "CRITICAL" and alert.score >= 80
     s.check(rig.now, "cb_close from engineering-laptop onto the fault", "CRITICAL · STATE-001 · score ≥ 80", ok,

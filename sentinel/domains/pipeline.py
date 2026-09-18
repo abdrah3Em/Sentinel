@@ -16,6 +16,11 @@ from ..guard.risk import RULE_NARRATIVE as NARRATIVES
 from ..models import Telemetry
 from ..plant.simulator import ALL_ACTIONS, Plant, dra_factor
 
+__all__ = ["ID", "Plant", "Telemetry", "ALL_ACTIONS", "SCENARIOS", "NARRATIVES", "RULES", "COMMAND_RULES",
+           "PROCESS_RULES", "CONSEQUENTIAL", "descriptor", "thresholds", "context_label", "setpoint_of",
+           "physics_residual", "mode_payload", "MODBUS", "MODBUS_PORT", "TREND_KEYS", "PHYSICS_THRESHOLD",
+           "PHYSICS_LABEL", "NARRATIVE_VARS"]
+
 ID = "pipeline"
 TITLE = "Crude oil pipeline pump station · T-101 / P-101 / MOV-201 · simulated"
 SHORT = "Pipeline simulation"

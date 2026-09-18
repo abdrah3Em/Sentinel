@@ -10,7 +10,7 @@ from collections import deque
 from typing import Any, Callable, Deque, Optional
 
 from .. import config, process
-from ..models import Alert, Command, Event, now_ms
+from ..models import Alert, Command
 from . import dispatcher, risk, rules
 from .state import ProcessState
 

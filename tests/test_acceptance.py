@@ -4,10 +4,7 @@ Severity note: the PRD's example calculation labels a score of 95 as "HIGH"
 while its own banding table puts 80-100 in CRITICAL. The banding table wins, so
 these tests assert "at least HIGH".
 """
-import pytest
-
 from sentinel import config
-from sentinel.models import Telemetry
 from tests.helpers import Rig
 
 HIGH = config.SEVERITY_ORDER["HIGH"]

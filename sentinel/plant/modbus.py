@@ -400,7 +400,6 @@ def read_inputs(host: str, port: int, address: int, count: int, unit: int = 1, t
 
 def read_discrete(host: str, port: int, address: int, count: int, unit: int = 1, timeout: float = 3.0) -> list[bool]:
     reply = _exchange(host, port, struct.pack(">BHH", 2, address, count), unit, timeout)
-    n = reply[8]
     return [bool(reply[9 + i // 8] >> (i % 8) & 1) for i in range(count)]
 
 

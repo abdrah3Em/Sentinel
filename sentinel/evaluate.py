@@ -14,7 +14,7 @@ import os
 import re
 from typing import Any
 
-from . import config, process
+from . import process
 from .attacks.base import ordered
 from .harness import Rig
 

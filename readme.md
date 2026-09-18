@@ -17,21 +17,19 @@ A `cb_close` is issued fifty times a week. The one sent while a fault is still o
 
 Built for **ICSC 2026 · Track E (Critical Infrastructure & Energy) · Challenge E1 — Catching Unsafe Commands in Your Own Control System**.
 
-![Grid console during the close-onto-fault attack](docs/img/ui-grid-overview.png)
-
 ---
 
 ## ⚡ Quickstart
 
-### 1. One line (what the judges type)
+### 1. One line
 
 ```bash
 git clone https://github.com/abdrah3Em/Sentinel.git && cd Sentinel && docker compose up
 ```
 
-Open **http://localhost:8080**. The operator token is in the console log (`docker compose logs dashboard-grid | grep token`).
+The console is at **http://localhost:8080**. The operator token is printed in the console log (`docker compose logs dashboard-grid | grep token`).
 
-### 2. Local Python (the demo laptop)
+### 2. Local Python
 
 Requires Python 3.10+ and Mosquitto (`sudo apt install mosquitto` / `brew install mosquitto`):
 
@@ -55,7 +53,7 @@ make metrics         # regenerate docs/RESULTS.md and the numbers below from a r
 
 ## 🔌 The Feeder
 
-One 11 kV radial feeder **F1**: a 33/11 kV transformer with an on-load tap changer under automatic voltage control, feeder breaker **CB-101**, sectionaliser **SW-102**, normally-open tie **TS-201** to feeder **F2** (its own transformer and breaker **CB-201**), a 2 MWp PV plant, and load groups including **hospital bus B3**. The physics is a forward-backward sweep power flow: per-section voltage drop, path-dependent fault current, protection trips, source paralleling with circulating current, and a tap changer that obediently walks the busbar out of statutory limits if you ask it to.
+One 11 kV radial feeder **F1**: a 33/11 kV transformer with an on-load tap changer under automatic voltage control, feeder breaker **CB-101**, sectionaliser **SW-102**, normally-open tie **TS-201** to feeder **F2** (its own transformer and breaker **CB-201**), a 2 MWp PV plant, and load groups including **hospital bus B3**. The physics is a forward-backward sweep power flow: per-section voltage drop, path-dependent fault current, protection trips, source paralleling with circulating current, and a tap changer that obediently walks the busbar out of statutory limits when commanded to.
 
 **Assets:** T1/OLTC · BB-101 · CB-101 · S1–S3 · SW-102 · PV-1 · TS-201 · CB-201 · S4–S5 · buses B1–B5
 **Physics modelled:** close-onto-fault (fault current, re-trip, switchgear stress), open under load (customers off, customer-minutes-lost), uncontrolled parallel, per-section permits-to-work, concurrent faults, AVC drift out of the ±6 % band.
@@ -98,7 +96,7 @@ Stale, replayed or physically inconsistent telemetry never silences an advisory:
 
 ### Signed commands, defeated replay
 
-Every keyed source signs `seq | ts | nonce | id | action | value` with a per-source HMAC key. The guard verifies the MAC, a per-source monotonic sequence, a nonce cache and a freshness window before any rule runs; rewriting `seq` or `ts` breaks the MAC, a verbatim replay fails sequence, nonce and clock. A compromised workstation with a valid key still produces a valid signature — which is why the physics and wrong-moment rules never consult it.
+Every keyed source signs `seq | ts | nonce | id | action | value` with a per-source HMAC key. The guard verifies the MAC, a per-source monotonic sequence, a nonce cache and a freshness window before any rule runs; rewriting `seq` or `ts` breaks the MAC, and a verbatim replay fails sequence, nonce and clock. A compromised workstation holding a valid key still produces a valid signature, which is why the physics and wrong-moment rules never consult it.
 
 ---
 
@@ -207,12 +205,19 @@ Sentinel/
 │   └── api/                      # Flask + SSE console (no build step, no network)
 ├── tests/                        # unit, acceptance (one per PRD criterion), signing, persistence, Modbus, integration
 ├── scripts/                      # vocabulary, README, offline-render checks; requirement pinning
-└── docs/                         # DEMO.md · RESULTS.md · THREAT-MODEL.md · DECISIONS.md · TASKS.md · PRD · img/
+└── docs/                         # DEMO.md · RESULTS.md · THREAT-MODEL.md · DECISIONS.md · PRD · img/
 ```
 
 More detail: [`QUICKSTART.md`](QUICKSTART.md).
 
 ---
+
+## 👥 Credits and Contributions
+
+* **abdrah3Em** — project lead, distribution-feeder model, detection engine, console.
+* **DanonymousCoder** — command dispatcher, mobile alerting, early process modelling.
+
+Contributions are welcome by pull request against `main`; `make test`, `make demo` and `make check-metrics` must pass, and every number in this README comes from `make metrics`, never by hand.
 
 ## 📜 License
 

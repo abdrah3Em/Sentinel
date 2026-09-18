@@ -5,8 +5,9 @@ from typing import Any, Callable
 
 from .. import config
 from ..bus import Bus
+from .schema import Envelope
 
-Handler = Callable[["Envelope"], None]
+Handler = Callable[[Envelope], None]
 
 _KINDS = {
     config.TOPIC_TELEMETRY: "telemetry", config.TOPIC_COMMAND: "command", config.TOPIC_EVENT: "event",
@@ -31,14 +32,12 @@ class MqttTransport:
     def stop(self) -> None:
         self.bus.stop()
 
-    def publish(self, envelope: "Envelope", retain: bool = False) -> None:
+    def publish(self, envelope: Envelope, retain: bool = False) -> None:
         self.bus.publish(envelope.channel or _TOPICS[envelope.kind], envelope.payload, retain=retain)
 
     def send(self, kind: str, payload: dict[str, Any], retain: bool = False) -> None:
-        from . import Envelope
         self.publish(Envelope(kind, _TOPICS[kind], payload, "mqtt"), retain=retain)
 
     def subscribe(self, kind: str, handler: Handler) -> None:
-        from . import Envelope
         topic = _TOPICS[kind]
         self.bus.subscribe(topic, lambda t, p: handler(Envelope(kind, t, p, "mqtt")))

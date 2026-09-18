@@ -12,7 +12,6 @@ import logging
 import threading
 import urllib.error
 import urllib.request
-from typing import Any
 
 from .. import config
 from ..models import Alert

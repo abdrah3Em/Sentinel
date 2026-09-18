@@ -19,7 +19,7 @@ import sys
 import time
 from typing import Any
 
-from . import config, evaluate, process
+from . import evaluate, process
 from .attacks.base import ordered
 from .harness import Rig
 from .models import Command
@@ -235,7 +235,7 @@ def build() -> tuple[str, str]:
     L.append("")
     L.append("## Engine evaluation time")
     L.append("")
-    L.append(f"| Samples | p50 ms | p95 ms | max ms | mean ms |")
+    L.append("| Samples | p50 ms | p95 ms | max ms | mean ms |")
     L.append("|---|---|---|---|---|")
     L.append(f"| {len(eng)} | {_pct(eng, 0.5):.2f} | {_pct(eng, 0.95):.2f} | {max(eng):.2f} | {statistics.mean(eng):.2f} |")
     L.append("")

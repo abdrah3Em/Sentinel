@@ -6,8 +6,9 @@ from typing import Any, Callable, Optional
 
 from ..models import Command
 from ..plant.modbus import ModbusIngress, ModbusMap
+from .schema import Envelope
 
-Handler = Callable[["Envelope"], None]
+Handler = Callable[[Envelope], None]
 
 
 class ModbusTransport:
@@ -18,12 +19,10 @@ class ModbusTransport:
         self.ingress: Optional[ModbusIngress] = None
 
     def _write(self, action: str, value: Optional[float], client: str) -> None:
-        from . import Envelope
         command = Command(action=action, source=f"modbus:{client}", value=value)
         self.on_envelope(Envelope("command", f"modbus:{self.port}", command.to_dict(), "modbus"))
 
     def _frame(self, frame: dict[str, Any]) -> None:
-        from . import Envelope
         self.on_envelope(Envelope("modbus", f"modbus:{self.port}", frame, "modbus"))
 
     def start(self) -> "ModbusTransport":
