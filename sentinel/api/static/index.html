@@ -106,10 +106,10 @@
           <div class="card">
             <div class="card-head"><h3>Process</h3><span class="sub" id="process-sub"></span></div>
             <div class="card-body">
-              <svg id="mimic-oil" class="mimic" viewBox="0 0 620 340" hidden>
+              <svg id="mimic-pipeline" class="mimic" viewBox="0 0 620 340" hidden>
                 <path class="pipe" d="M30 70 H150"/><path class="pipe flowline" id="pipe-inlet" d="M30 70 H150"/>
-                <text class="lbl left" x="30" y="56">Gathering</text>
-                <g id="valve-inlet" class="valve"><rect x="83" y="57" width="26" height="26" rx="3"/><path class="x" d="M89 63l14 14M103 63l-14 14"/><text class="lbl" x="96" y="100">V-101</text></g>
+                <text class="lbl left" x="30" y="56">Tank farm feed</text>
+                <g id="valve-inlet" class="valve"><rect x="83" y="57" width="26" height="26" rx="3"/><path class="x" d="M89 63l14 14M103 63l-14 14"/><text class="lbl" x="96" y="100">ESD-301</text></g>
 
                 <rect class="tank-body" x="150" y="40" width="170" height="200" rx="6"/>
                 <clipPath id="tankClip"><rect x="151" y="41" width="168" height="198" rx="5"/></clipPath>
@@ -120,20 +120,20 @@
                 <line class="limit" id="line-hi" x1="150" x2="320" y1="61.6" y2="61.6"/><text class="limit-lbl" id="lbl-hi" x="328" y="64.6">HI 90</text>
                 <line class="limit" id="line-lo" x1="150" x2="320" y1="198.8" y2="198.8"/><text class="limit-lbl" id="lbl-lo" x="328" y="201.8">LO 20</text>
                 <line class="sp" id="line-sp" x1="150" x2="320" y1="120.4" y2="120.4"/><text class="limit-lbl sp" id="lbl-sp" x="328" y="123.4">SP</text>
-                <text class="lbl" x="235" y="30">Tank T-101</text>
+                <text class="lbl" x="235" y="30">Tank farm T-101</text>
                 <text class="read" id="tank-read" x="235" y="150">—</text>
 
                 <path class="pipe" d="M235 240 V285 H360"/><path class="pipe flowline" id="pipe-suction" d="M235 240 V285 H360"/>
-                <g id="pump" class="pump"><circle cx="390" cy="285" r="25"/><path class="impeller" id="impeller" d="M390 268 L390 285 L405 294"/><text class="lbl" x="390" y="328">Pump P-101</text></g>
+                <g id="pump" class="pump"><circle cx="390" cy="285" r="25"/><path class="impeller" id="impeller" d="M390 268 L390 285 L405 294"/><text class="lbl" x="390" y="328">P-101 mainline</text></g>
 
                 <path class="pipe" d="M416 285 H500 V150 H575"/><path class="pipe flowline" id="pipe-discharge" d="M416 285 H500 V150 H575"/>
                 <path id="deadhead-zone" class="deadhead" d="M416 285 H500 V212"/>
-                <g id="valve-outlet" class="valve"><rect x="487" y="197" width="26" height="26" rx="3"/><path class="x" d="M493 203l14 14M507 203l-14 14"/><text class="lbl" x="500" y="240">V-102</text></g>
+                <g id="valve-outlet" class="valve"><rect x="487" y="197" width="26" height="26" rx="3"/><path class="x" d="M493 203l14 14M507 203l-14 14"/><text class="lbl" x="500" y="240">MOV-201</text></g>
                 <text class="lbl left" x="540" y="138">Pipeline</text>
                 <path id="arrow-out" class="arrow" d="M578 150 l-12 -6 v12 z"/>
 
-                <g class="gauge" id="gauge-pt"><circle cx="500" cy="100" r="23"/><text class="gv" id="pt-value" x="500" y="104">—</text><text class="lbl" x="500" y="68">PT-101 bar</text></g>
-                <g class="gauge" id="gauge-ft"><circle cx="575" cy="240" r="23"/><text class="gv" id="ft-value" x="575" y="244">—</text><text class="lbl" x="575" y="208">FT-101 m³/h</text></g>
+                <g class="gauge" id="gauge-pt"><circle cx="500" cy="100" r="23"/><text class="gv" id="pt-value" x="500" y="104">—</text><text class="lbl" x="500" y="68">PT-201 bar</text></g>
+                <g class="gauge" id="gauge-ft"><circle cx="575" cy="240" r="23"/><text class="gv" id="ft-value" x="575" y="244">—</text><text class="lbl" x="575" y="208">FT-201 m³/h</text></g>
               </svg>
               <svg id="mimic-grid" class="mimic" viewBox="0 0 620 340" hidden>
                 <!-- T1 33/11 kV with OLTC -->

@@ -188,7 +188,7 @@ class ProcessState:
             return 0.0
         return process.domain().physics_residual(self.telemetry)[1]
 
-    # Station-era names, kept for the oil tests and narratives.
+    # Pump-station names, kept for the pipeline tests and narratives.
     expected_flow = expected
     flow_residual = residual
 

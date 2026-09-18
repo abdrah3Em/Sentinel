@@ -1,6 +1,6 @@
 /* Sentinel dashboard.  One SSE stream feeds a small in-memory store; views render from it.
    The overview is built from the process descriptor the API sends in the snapshot, so the
-   same shell serves the oil pumping station and the distribution feeder. */
+   same shell serves the distribution feeder and the pipeline pump station. */
 'use strict';
 
 const $ = (id) => document.getElementById(id);
@@ -210,12 +210,12 @@ function renderProcess() {
 function setBadge(id, [cls, text]) { const el = $(id); el.className = 'badge ' + cls; el.textContent = text; }
 function setEquip(key, text, cls) { $('eq-' + key).textContent = text; $('eq-' + key + '-i').className = 'eq-icon ' + cls; }
 
-/* ---------------------------------------------------------------- domain: oil pumping station */
+/* ---------------------------------------------------------------- domain: pipeline pump station */
 const TANK = { top: 41, height: 198, levelMin: 20, levelMax: 90, pressureMax: 5.0, pressureWarn: 4.0 };
 function expectedFlow(t) {
   if (!t.pump || !t.outlet_valve) return 0;
   const suction = t.tank_level >= 8 ? 1 : Math.pow(Math.max(0, t.tank_level / 8), 1.5);
-  return 95 * (0.82 + 0.18 * t.tank_level / 100) * suction;
+  return 95 * (0.82 + 0.18 * t.tank_level / 100) * suction * (1 + 0.12 * Math.max(0, Math.min(100, t.dra_rate || 0)) / 100);
 }
 function setLine(lineId, labelId, value, text) {
   if (value === undefined || value === null) return;
@@ -224,7 +224,7 @@ function setLine(lineId, labelId, value, text) {
   $(labelId).setAttribute('y', y + 3); $(labelId).textContent = text;
 }
 const tankDomain = {
-  derive: (t) => ({ expected_flow: expectedFlow(t) }),
+  derive: (t) => ({ expected_flow: expectedFlow(t), ullage: 100 - (t.tank_level || 0) }),
   kpi(key, t) {
     const deadhead = t.pump && !t.outlet_valve, level = t.tank_level, p = t.pressure;
     switch (key) {
@@ -270,10 +270,10 @@ const tankDomain = {
   },
   note(t) {
     const deadhead = t.pump && !t.outlet_valve, flowing = t.flow > 5;
-    if (deadhead) return ['bad', `Dead-headed ${num(t.deadhead_s, 0)} s · ${num(t.flow, 0)} m³/h · ${num(t.pressure, 2)} bar rising`];
-    if (t.dry_run_s > 1) return ['bad', `Dry running · level ${num(t.tank_level, 0)} % below pump minimum`];
+    if (deadhead) return ['bad', `Surge · P-101 dead-headed ${num(t.deadhead_s, 0)} s · ${num(t.flow, 0)} m³/h · ${num(t.pressure, 2)} bar rising`];
+    if (t.dry_run_s > 1) return ['bad', `Cavitation · tank farm ${num(t.tank_level, 0)} % below suction minimum`];
     if (t.pump && flowing) return ['', `Nominal · ${num(t.flow, 0)} m³/h · ${num(t.pressure, 2)} bar`];
-    return ['', t.pump ? 'Pump running · no flow yet' : 'Pump stopped'];
+    return ['', t.pump ? 'P-101 running · no flow yet' : 'P-101 stopped · segment static'];
   },
 };
 
@@ -350,7 +350,7 @@ const gridDomain = {
     return ['', `Nominal · ${num(t.i_feeder_a, 0)} A · ${num(t.v_bus_kv, 2)} kV · tap ${signed(t.tap)} · PV ${num(t.pv_kw / 1000, 1)} MW`];
   },
 };
-const DOMAINS = { grid: gridDomain, oil: tankDomain };
+const DOMAINS = { grid: gridDomain, pipeline: tankDomain };
 
 /* ================================================================ render: charts */
 function renderSparklines() {

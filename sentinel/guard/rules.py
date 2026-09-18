@@ -72,22 +72,22 @@ def rule_discharge_closure(ctx: RuleContext) -> list[Finding]:
         return []
     findings = [
         Finding("SEQ-001", "state", W["PUMP_RUNNING"],
-                f"Pump is running · {ctx.t.pump_runtime_s:.0f} s", "Pump P-101"),
+                f"Pump is running · {ctx.t.pump_runtime_s:.0f} s", "Mainline pump P-101"),
         Finding("SEQ-001", "state", W["CLOSING_DISCHARGE"],
                 "Closes the only discharge path with the pump energised",
-                "Outlet valve V-102"),
+                "MOV-201"),
     ]
     if ctx.flow_active:
         findings.append(Finding("SEQ-001", "state", W["FLOW_ACTIVE"],
                                 f"Flow {ctx.t.flow:.0f} m³/h through the outlet",
-                                "Flow transmitter FT-101"))
+                                "Mainline flow FT-201"))
     if not ctx.maintenance:
         findings.append(Finding("SEQ-001", "context", W["NOT_MAINTENANCE"],
                                 f"{ctx.t.mode} mode, not maintenance", "Controller"))
     if ctx.pump_stop_pending():
         findings.append(Finding("SEQ-001", "context", W["PUMP_STOPPING"],
                                 "Pump stop commanded seconds earlier — isolating in order",
-                                "Pump P-101"))
+                                "Mainline pump P-101"))
     return findings
 
 
@@ -99,8 +99,8 @@ def rule_deadhead_start(ctx: RuleContext) -> list[Finding]:
         return []
     findings = [
         Finding("STATE-002", "state", W["DEADHEAD_START"],
-                "Outlet valve closed — no discharge path",
-                "Pump P-101 / Outlet valve V-102"),
+                "MOV-201 closed — no discharge path",
+                "Mainline pump P-101 / MOV-201"),
     ]
     if not ctx.maintenance:
         findings.append(Finding("STATE-002", "context", W["NOT_MAINTENANCE"],
@@ -117,11 +117,11 @@ def rule_dry_run(ctx: RuleContext) -> list[Finding]:
     weight = W["DRY_RUN"] if ctx.t.tank_level < config.PUMP_MIN_SUCTION_LEVEL else W["SUCTION_STARVED"]
     return [Finding("STATE-003", "state", weight,
                     f"Level {ctx.t.tank_level:.0f} %, below the {config.LEVEL_MIN_PCT:.0f} % suction minimum",
-                    "Tank T-101 / Pump P-101")]
+                    "Tank farm T-101 / Mainline pump P-101")]
 
 
 def rule_suction_isolation(ctx: RuleContext) -> list[Finding]:
-    """STATE-004 — cut the make-up supply while the pump is drawing the tank down."""
+    """STATE-004 — close ESD-301 while P-101 is drawing the tank farm down."""
     if not ctx.command or ctx.command.action != "inlet_close" or not ctx.t:
         return []
     if not ctx.t.pump or not ctx.flow_active:
@@ -131,8 +131,8 @@ def rule_suction_isolation(ctx: RuleContext) -> list[Finding]:
         return []
     minutes = max(0.1, (headroom / 100.0 * config.TANK_CAPACITY_L) / max(1.0, ctx.t.flow))
     return [Finding("STATE-004", "state", W["SUCTION_STARVED"],
-                    f"Inlet isolated at {ctx.t.flow:.0f} m³/h draw — low limit in about {minutes:.1f} min",
-                    "Inlet valve V-101 / Tank T-101")]
+                    f"ESD-301 closed at {ctx.t.flow:.0f} m³/h draw — low limit in about {minutes:.1f} min",
+                    "ESD-301 / Tank farm T-101")]
 
 
 # ---------------------------------------------------------------------------
@@ -154,7 +154,7 @@ def rule_setpoint_change(ctx: RuleContext) -> list[Finding]:
     if not (config.SETPOINT_MIN <= requested <= config.SETPOINT_MAX):
         findings.append(Finding("ENV-001", "envelope", W["SETPOINT_OUT_OF_RANGE"],
                                 f"{requested:.0f} % is outside the {config.SETPOINT_MIN:.0f}–{config.SETPOINT_MAX:.0f} % band",
-                                "Tank T-101"))
+                                "Tank farm T-101"))
     return findings
 
 
@@ -183,7 +183,7 @@ def rule_setpoint_drift(ctx: RuleContext) -> list[Finding]:
     band = f"{config.SETPOINT_MIN:.0f}–{config.SETPOINT_MAX:.0f} % band"
     if not (config.SETPOINT_MIN <= requested <= config.SETPOINT_MAX):
         findings.append(Finding("ROC-002", "rate", W["DRIFT_TRAJECTORY"],
-                                f"Now outside the {band}", "Tank T-101"))
+                                f"Now outside the {band}", "Tank farm T-101"))
         return findings
     rate = net / elapsed_min
     remaining = edge - requested
@@ -192,7 +192,7 @@ def rule_setpoint_drift(ctx: RuleContext) -> list[Finding]:
         if minutes <= config.DRIFT_PROJECTION_MIN:
             when = "under a minute" if minutes < 1 else f"about {minutes:.0f} min"
             findings.append(Finding("ROC-002", "rate", W["DRIFT_TRAJECTORY"],
-                                    f"Trajectory leaves the {band} in {when}", "Tank T-101"))
+                                    f"Trajectory leaves the {band} in {when}", "Tank farm T-101"))
     return findings
 
 
@@ -208,11 +208,11 @@ def rule_envelope_pressure(ctx: RuleContext) -> list[Finding]:
     if ctx.t.pressure > config.PRESSURE_MAX_BAR:
         return [Finding("ENV-002", "envelope", W["ENVELOPE_BREACH"],
                         f"Pressure {ctx.t.pressure:.1f} bar, above the {config.PRESSURE_MAX_BAR:.1f} bar limit",
-                        "Pressure transmitter PT-101")]
+                        "Discharge pressure PT-201")]
     if ctx.t.pressure > config.PRESSURE_WARN_BAR:
         return [Finding("ENV-002", "envelope", W["ENVELOPE_APPROACH"],
                         f"Pressure {ctx.t.pressure:.1f} bar, near the {config.PRESSURE_MAX_BAR:.1f} bar limit",
-                        "Pressure transmitter PT-101")]
+                        "Discharge pressure PT-201")]
     return []
 
 
@@ -243,10 +243,10 @@ def rule_rapid_sequence(ctx: RuleContext) -> list[Finding]:
 
 
 UNSAFE_PATTERNS = [
-    (("pump_start", "outlet_close"), "Pump started and then the discharge closed"),
-    (("outlet_close", "setpoint"), "Discharge closed and then the setpoint driven up"),
+    (("pump_start", "outlet_close"), "P-101 started and then MOV-201 closed"),
+    (("outlet_close", "setpoint"), "MOV-201 closed and then the setpoint driven up"),
     (("maintenance_off", "outlet_close"), "Maintenance cleared immediately before an unsafe valve command"),
-    (("inlet_close", "outlet_close"), "Both tank valves isolated in sequence"),
+    (("inlet_close", "outlet_close"), "ESD-301 and MOV-201 both closed in sequence"),
 ]
 
 
@@ -362,7 +362,7 @@ def rule_physics_residual(ctx: RuleContext) -> list[Finding]:
     return [Finding("PHY-001", "physics", W["PHYSICS_MISMATCH"],
                     f"Pump {'ON' if t.pump else 'OFF'}, outlet {'OPEN' if t.outlet_valve else 'CLOSED'} → "
                     f"expect ~{expected:.0f} m³/h, reading {t.flow:.0f}",
-                    "Flow transmitter FT-101")]
+                    "Mainline flow FT-201")]
 
 
 def rule_learned_baseline(ctx: RuleContext) -> list[Finding]:

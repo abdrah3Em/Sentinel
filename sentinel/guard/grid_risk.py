@@ -2,7 +2,7 @@
 
 What happened, which equipment, why it matters, what to verify — in the words
 of a control-room engineer.  Integrity narratives (CMD-001, TEL-00x) are shared
-with the oil station in risk.py.
+with the pipeline pump station in risk.py.
 """
 from __future__ import annotations
 

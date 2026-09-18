@@ -7,15 +7,15 @@ from .risk import narratives
 W = config.WEIGHTS
 
 RULES = [
-    {"id": "SEQ-001", "layer": "State", "trigger": "outlet_close while the pump is running",
+    {"id": "SEQ-001", "layer": "State", "trigger": "outlet_close (MOV-201) while P-101 is running",
      "weights": [("Pump running", W["PUMP_RUNNING"]), ("Closing discharge path", W["CLOSING_DISCHARGE"]),
                  ("Flow active", W["FLOW_ACTIVE"]), ("Not in maintenance", W["NOT_MAINTENANCE"]),
                  ("Pump stop already commanded", W["PUMP_STOPPING"])]},
-    {"id": "STATE-002", "layer": "State", "trigger": "pump_start while the outlet valve is closed",
+    {"id": "STATE-002", "layer": "State", "trigger": "pump_start while MOV-201 is closed",
      "weights": [("Dead-head start", W["DEADHEAD_START"]), ("Not in maintenance", W["NOT_MAINTENANCE"])]},
     {"id": "STATE-003", "layer": "State", "trigger": "pump_start below minimum suction level",
      "weights": [("Suction starved", W["SUCTION_STARVED"]), ("Dry run", W["DRY_RUN"])]},
-    {"id": "STATE-004", "layer": "State", "trigger": "inlet_close while the pump draws the tank toward the low limit",
+    {"id": "STATE-004", "layer": "State", "trigger": "inlet_close while P-101 draws the tank farm toward the low limit",
      "weights": [("Suction starved", W["SUCTION_STARVED"])]},
     {"id": "ROC-001", "layer": "Rate of change",
      "trigger": f"setpoint step beyond ±{config.SETPOINT_NORMAL_DELTA:.0f} % / {config.SETPOINT_LARGE_DELTA:.0f} %",
@@ -74,7 +74,7 @@ def thresholds() -> dict:
 POLICY = {
     "when_unsure": ("Stale, replayed or physically inconsistent telemetry never silences an advisory: it is "
                     "raised at LOW or REDUCED confidence with a statement of what could not be verified."),
-    "never_blocks": ("Safe-direction commands (pump stop, valve open, maintenance on) are never flagged alone, "
+    "never_blocks": ("Safe-direction commands (P-101 stop, MOV-201 open, maintenance on) are never flagged alone, "
                      "and the guard has no write path to the plant."),
     "human_decides": "Every advisory ends with one verification step. The engineer decides.",
     "limits": ("Sentinel sees only what the broker carries: a spoofed source label passes SRC-001 and rewritten "
@@ -83,7 +83,7 @@ POLICY = {
 }
 
 
-def tank_thresholds() -> dict:
+def station_thresholds() -> dict:
     return {
         "severity_bands": [{"min": m, "level": l} for m, l in config.SEVERITY_BANDS],
         "alert_min_score": config.ALERT_MIN_SCORE,

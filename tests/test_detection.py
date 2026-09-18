@@ -196,7 +196,7 @@ def test_status_reports_the_worst_recent_alert():
     status = rig.guard.status(now=rig.now)
     assert status["level"] in ("HIGH", "CRITICAL")
     assert status["risk_score"] >= 80
-    assert "conflicts with running pump" in status["headline"]
+    assert "conflicts with running" in status["headline"]
 
 
 def test_stats_group_by_level_and_rule():

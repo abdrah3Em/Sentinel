@@ -13,41 +13,41 @@ from ..models import Alert, Command, Finding
 # Narrative per dominant rule: what happened, why it matters, what to verify.
 RULE_NARRATIVE: dict[str, dict[str, str]] = {
     "SEQ-001": {
-        "summary": "Pipeline valve close conflicts with running pump",
-        "equipment": "Pipeline valve V-102 / Transfer pump P-101",
-        "why": "Closing the only pipeline path dead-heads the running pump: flow stops, pressure climbs to "
-               "{shutoff:.1f} bar shut-off against a {limit:.1f} bar limit — seal failure and a hydrocarbon release.",
-        "recommendation": "Stop the pump and confirm zero flow before isolating the outlet; if nobody owns "
+        "summary": "MOV-201 close conflicts with running mainline pump",
+        "equipment": "MOV-201 / Mainline pump P-101",
+        "why": "Slamming MOV-201 shut dead-heads P-101: flow stops and a surge drives pressure to "
+               "{shutoff:.1f} bar shut-off against the {limit:.1f} bar segment MAOP — seal failure and a hydrocarbon release.",
+        "recommendation": "Stop P-101 and confirm zero flow before closing MOV-201; if nobody owns "
                           "this command, treat the source as compromised.",
     },
     "STATE-002": {
-        "summary": "Pump start requested with the pipeline closed",
-        "equipment": "Pump P-101 / Outlet valve V-102",
-        "why": "The outlet is closed, so the pump starts dead-headed and reaches shut-off head within seconds.",
-        "recommendation": "Open the outlet and line up the discharge before starting; confirm who requested the start.",
+        "summary": "P-101 start requested with MOV-201 closed",
+        "equipment": "Mainline pump P-101 / MOV-201",
+        "why": "MOV-201 is closed, so P-101 starts dead-headed and surges to shut-off head within seconds.",
+        "recommendation": "Open MOV-201 and line up the segment before starting; confirm who requested the start.",
     },
     "STATE-003": {
-        "summary": "Pump start requested with insufficient suction level",
-        "equipment": "Tank T-101 / Pump P-101",
-        "why": "Tank level is below the pump's minimum suction: the pump cavitates and loses flow.",
-        "recommendation": "Restore level above the minimum and confirm the inlet is open before starting.",
+        "summary": "P-101 start requested with insufficient suction",
+        "equipment": "Tank farm T-101 / Mainline pump P-101",
+        "why": "Tank farm level is below P-101's minimum suction: the pump cavitates and loses flow.",
+        "recommendation": "Restore tank farm level above the minimum and confirm ESD-301 is open before starting.",
     },
     "STATE-004": {
-        "summary": "Inlet isolation while the pump is drawing the tank down",
-        "equipment": "Inlet valve V-101 / Tank T-101",
-        "why": "With the gathering inlet closed the pump drains the tank to the low limit and loses suction.",
-        "recommendation": "Reduce or stop the pump before isolating the inlet.",
+        "summary": "ESD-301 closed while P-101 is drawing the tank farm down",
+        "equipment": "ESD-301 / Tank farm T-101",
+        "why": "With ESD-301 closed P-101 drains the tank farm to the low limit and loses suction.",
+        "recommendation": "Reduce or stop P-101 before closing ESD-301.",
     },
     "ROC-001": {
         "summary": "Unusually large setpoint change",
-        "equipment": "Controller / Tank T-101",
+        "equipment": "Station RTU / Tank farm T-101",
         "why": "Setpoints are trimmed in small steps; one large step drives the process toward a limit "
                "faster than the loop or the operator can react.",
         "recommendation": "Confirm the target with the shift engineer; ramp it in steps if it is genuine.",
     },
     "ROC-002": {
         "summary": "Setpoint is being drifted toward the edge of the safe band",
-        "equipment": "Controller / Tank T-101",
+        "equipment": "Station RTU / Tank farm T-101",
         "why": "Each trim looks routine, but the cumulative movement is heading for the operating limit — "
                "how an attacker walks a process out of range without one command looking wrong.",
         "recommendation": "Compare with the shift log; if nobody owns the trajectory, restore the logged "
@@ -63,13 +63,13 @@ RULE_NARRATIVE: dict[str, dict[str, str]] = {
     },
     "ENV-001": {
         "summary": "Requested setpoint is outside the safe operating envelope",
-        "equipment": "Tank T-101",
+        "equipment": "Tank farm T-101",
         "why": "The value sits outside the documented band, leaving no margin to the level protection.",
         "recommendation": "Reject or correct the setpoint and verify who issued it.",
     },
     "ENV-002": {
         "summary": "Command issued while the process is already near an operating limit",
-        "equipment": "Pressure transmitter PT-101",
+        "equipment": "Discharge pressure PT-201",
         "why": "Pressure is already near its limit; adding load removes the remaining margin to a trip.",
         "recommendation": "Bring pressure back inside the envelope before making further changes.",
     },

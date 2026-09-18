@@ -7,13 +7,13 @@
 **Target:** Functional prototype + live demonstration
 **Primary environment:** Simulated distribution feeder controlled over MQTT
 **Process model:** One 11 kV radial feeder with a tap-changing transformer, a feeder breaker, a sectionaliser, a normally-open tie, a PV plant and three load groups (one critical)
-**Supersedes:** revision 1 (water tank / pump skid), archived at `docs/PRD-v1-water-tank.md`
+**Supersedes:** revision 1 (liquid-transfer pump skid), whose hydraulics now live on as the pipeline pump station profile
 
 ---
 
 # 0. Why this revision
 
-Revision 1 built Sentinel around a water tank, a pump and two valves, because the
+Revision 1 built Sentinel around a storage tank, a pump and two valves, because the
 challenge text offers that as a minimal example. Re-reading the brief, the actual
 requirement is *"a working simulated process controlled over Modbus TCP or MQTT"*
 — the tank is a suggestion, not a specification.

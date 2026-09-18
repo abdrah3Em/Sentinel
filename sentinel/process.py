@@ -13,7 +13,7 @@ from typing import Optional
 
 from . import config
 
-KNOWN = ("grid", "oil")
+KNOWN = ("grid", "pipeline")
 _active: Optional[str] = None
 
 
@@ -34,7 +34,7 @@ def domain() -> ModuleType:
     return import_module(f"sentinel.domains.{active_id()}")
 
 
-CONSOLE_LABELS = {"grid": "Grid simulation", "oil": "Oil pipeline simulation"}
+CONSOLE_LABELS = {"grid": "Grid simulation", "pipeline": "Pipeline simulation"}
 
 
 def consoles() -> list[dict]:

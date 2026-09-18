@@ -90,15 +90,24 @@ else
 fi
 
 # 2. Services --------------------------------------------------------------
-# Two simulated processes, each with its own plant, guard and console, sharing
-# the broker under separate topic namespaces (tank/... and grid/...).
-#   ./run.sh          both consoles
-#   ./run.sh grid     11 kV distribution feeder only
-#   ./run.sh oil      crude oil pumping station only
-ONLY="${1:-both}"
+# The flagship is the 11 kV feeder.  The pipeline pump station is a portability
+# proof for the same detector core, behind one flag.  Both share the broker under
+# separate topic namespaces (grid/... and pipeline/...).
+#   ./run.sh                       grid console only (the demo)
+#   ./run.sh --profile pipeline    pipeline console only
+#   ./run.sh --profile both        both consoles
+ONLY="grid"
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --profile) ONLY="${2:-grid}"; shift 2 ;;
+    --profile=*) ONLY="${1#--profile=}"; shift ;;
+    grid|pipeline|both) ONLY="$1"; shift ;;
+    *) echo "usage: ./run.sh [--profile grid|pipeline|both]" >&2; exit 2 ;;
+  esac
+done
 GRID_PORT="${SENTINEL_GRID_PORT:-${SENTINEL_API_PORT:-8080}}"
-OIL_PORT="${SENTINEL_OIL_PORT:-8081}"
-export SENTINEL_GRID_PORT="$GRID_PORT" SENTINEL_OIL_PORT="$OIL_PORT"
+PIPELINE_PORT="${SENTINEL_PIPELINE_PORT:-8081}"
+export SENTINEL_GRID_PORT="$GRID_PORT" SENTINEL_PIPELINE_PORT="$PIPELINE_PORT"
 
 start_stack() {
   local proc="$1" port="$2"
@@ -113,14 +122,14 @@ start_stack() {
   PIDS+=($!)
 }
 
-[ "$ONLY" = "oil" ] || start_stack grid "$GRID_PORT"
-[ "$ONLY" = "grid" ] || start_stack oil "$OIL_PORT"
+[ "$ONLY" = "pipeline" ] || start_stack grid "$GRID_PORT"
+[ "$ONLY" = "grid" ] || start_stack pipeline "$PIPELINE_PORT"
 
 echo
 echo "✔ SENTINEL is running"
-[ "$ONLY" = "oil" ] || echo "  Grid simulation:          http://localhost:$GRID_PORT"
-[ "$ONLY" = "grid" ] || echo "  Oil pipeline simulation:  http://localhost:$OIL_PORT"
-echo "  Attack CLI:  $PY -m sentinel.attacks.run --list   (SENTINEL_PROCESS=oil for the station)"
+[ "$ONLY" = "pipeline" ] || echo "  Grid simulation:      http://localhost:$GRID_PORT"
+[ "$ONLY" = "grid" ] || echo "  Pipeline simulation:  http://localhost:$PIPELINE_PORT"
+echo "  Attack CLI:  $PY -m sentinel.attacks.run --list   (SENTINEL_PROCESS=pipeline for the pump station)"
 echo "  Logs in:     ./$LOGS/"
 echo "  Press Ctrl-C to stop."
 echo

@@ -15,22 +15,21 @@ MQTT_PORT = int(os.environ.get("SENTINEL_MQTT_PORT", "1883"))
 MQTT_KEEPALIVE = 30
 
 # --------------------------------------------------------------------------
-# Simulated process: "grid" (11 kV distribution feeder, PRD rev 2 — the primary
-# console) or "oil" (crude oil pumping station: tank, transfer pump, pipeline
-# valves — the liquid-transfer hydraulics of PRD rev 1).  Each process runs as
-# its own plant + guard + console; they share one broker under separate topic
-# namespaces.  Everything below the engine is shared code.
+# Simulated process: "grid" (11 kV distribution feeder, PRD rev 2 — the flagship
+# console) or "pipeline" (crude oil pipeline pump station — the portability proof
+# for the same detector core).  Each process runs as its own plant + guard +
+# console; they share one broker under separate topic namespaces.
 # --------------------------------------------------------------------------
 PROCESS = os.environ.get("SENTINEL_PROCESS", "grid").strip().lower()
 CONSOLE_PORTS = {
     "grid": int(os.environ.get("SENTINEL_GRID_PORT", "8080")),
-    "oil": int(os.environ.get("SENTINEL_OIL_PORT", "8081")),
+    "pipeline": int(os.environ.get("SENTINEL_PIPELINE_PORT", "8081")),
 }
 
-MODBUS_PORTS = {"grid": 5020, "oil": 5021}
+MODBUS_PORTS = {"grid": 5020, "pipeline": 5021}
 MODBUS_PORT = int(os.environ.get("SENTINEL_MODBUS_PORT", MODBUS_PORTS.get(PROCESS, 0)))   # 0 disables
 
-TOPIC_NS = os.environ.get("SENTINEL_TOPIC_NS", PROCESS)   # e.g. grid/plant/telemetry, oil/plant/telemetry
+TOPIC_NS = os.environ.get("SENTINEL_TOPIC_NS", PROCESS)   # e.g. grid/plant/telemetry, pipeline/plant/telemetry
 TOPIC_TELEMETRY = f"{TOPIC_NS}/plant/telemetry"
 TOPIC_COMMAND = f"{TOPIC_NS}/plant/command"
 TOPIC_EVENT = f"{TOPIC_NS}/plant/event"
@@ -68,13 +67,13 @@ TELEGRAM_CHAT_ID = os.environ.get("SENTINEL_TELEGRAM_CHAT_ID", "")
 DISPATCH_MIN_LEVEL = os.environ.get("SENTINEL_DISPATCH_MIN_LEVEL", "HIGH")
 
 # --------------------------------------------------------------------------
-# Process simulation — oil pumping station (flows in m³/h, level in %, bar)
+# Process simulation — pipeline pump station (flows in m³/h, level in %, bar)
 # --------------------------------------------------------------------------
 TELEMETRY_PERIOD_S = 0.5          # 2 Hz telemetry, per PRD section 12
 SIM_TICK_S = 0.1                  # physics integration step
 
 TANK_CAPACITY_L = 500.0           # tank volume units at 100 % (flow units per minute × 60 = m³/h)
-INLET_FLOW_LPM = 120.0            # gathering inlet fully open
+INLET_FLOW_LPM = 120.0            # ESD-301 fully open, tank farm feed
 PUMP_RATED_FLOW_LPM = 95.0        # free-discharge flow at rated speed
 PUMP_SHUTOFF_HEAD_BAR = 6.4       # dead-headed pump pressure (physical ceiling)
 PUMP_MIN_SUCTION_LEVEL = 8.0      # below this the pump starts to cavitate

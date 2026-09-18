@@ -17,7 +17,7 @@ def new_id() -> str:
 
 @dataclass
 class Telemetry:
-    """One sensor frame published by the plant (PRD section 12)."""
+    """One sensor frame published by the pump station RTU."""
 
     ts: int = field(default_factory=now_ms)
     seq: int = 0
@@ -28,6 +28,7 @@ class Telemetry:
     inlet_valve: bool = False
     outlet_valve: bool = False
     setpoint: float = 60.0
+    dra_rate: float = 0.0
     mode: str = "AUTO"
     maintenance: bool = False
     pump_runtime_s: float = 0.0

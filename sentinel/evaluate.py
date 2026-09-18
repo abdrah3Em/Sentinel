@@ -19,7 +19,7 @@ from .attacks.base import ordered
 from .harness import Rig
 
 LEVELS = ["LOW", "MEDIUM", "HIGH", "CRITICAL"]
-PROCESS_NAMES = {"grid": "Grid — 11 kV feeder", "oil": "Oil pumping station"}
+PROCESS_NAMES = {"grid": "Grid — 11 kV feeder", "pipeline": "Pipeline pump station"}
 
 
 def required_level(scenario) -> tuple[str, bool]:

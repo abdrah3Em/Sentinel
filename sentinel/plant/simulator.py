@@ -1,13 +1,17 @@
-"""Physical model of a crude oil pumping station: storage tank, transfer pump, pipeline valves.
+"""Physical model of a crude oil pipeline pump station.
+
+Tank farm T-101 -> ESD-301 (station inlet shutdown valve) -> mainline pump P-101
+-> MOV-201 (sectionalising valve) -> mainline segment.  A DRA skid injects drag
+reducing agent to raise segment throughput.
 
 The simulator is deliberately a plain, deterministic, dt-driven object with no
 I/O so it can be unit tested and driven at any speed.  It models the physical
 consequences that make an otherwise-valid command dangerous:
 
-    pump running into a closed outlet  -> flow collapses, pressure climbs
-                                          toward pump shut-off head
-    pump running on an empty tank      -> cavitation, flow decays
-    inlet closed while drawing down    -> tank runs toward the low limit
+    P-101 running into a closed MOV-201  -> flow collapses, surge: pressure
+                                            climbs toward pump shut-off head
+    P-101 running on a drained tank farm -> cavitation, flow decays
+    ESD-301 closed while drawing down    -> tank farm runs to the low limit
 
 Note that the plant has *no* cyber protection of its own.  It accepts any
 correctly formed command, exactly like the controllers this project is about.
@@ -26,7 +30,13 @@ ACTUATOR_ACTIONS = {
     "outlet_open", "outlet_close",
     "inlet_open", "inlet_close",
 }
-ALL_ACTIONS = ACTUATOR_ACTIONS | {"setpoint", "maintenance_on", "maintenance_off", "mode_auto", "mode_manual"}
+ALL_ACTIONS = ACTUATOR_ACTIONS | {"setpoint", "dra_rate", "maintenance_on", "maintenance_off", "mode_auto",
+                                  "mode_manual"}
+DRA_MAX_GAIN = 0.12               # drag reducing agent at 100 % raises segment throughput by this fraction
+
+
+def dra_factor(rate_pct: float) -> float:
+    return 1.0 + DRA_MAX_GAIN * max(0.0, min(100.0, float(rate_pct or 0.0))) / 100.0
 
 
 @dataclass
@@ -47,6 +57,7 @@ class Plant:
     inlet_valve: bool = True
     outlet_valve: bool = True
     setpoint: float = config.DEFAULT_SETPOINT
+    dra_rate: float = 0.0
     mode: str = "AUTO"
     maintenance: bool = False
 
@@ -66,49 +77,53 @@ class Plant:
         events: list[PlantEvent] = []
         if action == "pump_start":
             if not self.pump:
-                events.append(PlantEvent("PUMP_STATE", "Pump started"))
+                events.append(PlantEvent("PUMP_STATE", "Mainline pump P-101 started"))
             self.pump = True
         elif action == "pump_stop":
             if self.pump:
-                events.append(PlantEvent("PUMP_STATE", "Pump stopped"))
+                events.append(PlantEvent("PUMP_STATE", "Mainline pump P-101 stopped"))
             self.pump = False
             self.pump_runtime_s = 0.0
         elif action == "outlet_open":
             self.outlet_valve = True
-            events.append(PlantEvent("VALVE_STATE", "Outlet valve opened"))
+            events.append(PlantEvent("VALVE_STATE", "MOV-201 opened"))
         elif action == "outlet_close":
             self.outlet_valve = False
-            events.append(PlantEvent("VALVE_STATE", "Outlet valve closed"))
+            events.append(PlantEvent("VALVE_STATE", "MOV-201 closed"))
         elif action == "inlet_open":
             self.inlet_valve = True
             self.inlet_override_until = self.clock + 30.0
-            events.append(PlantEvent("VALVE_STATE", "Inlet valve opened (manual override)"))
+            events.append(PlantEvent("VALVE_STATE", "ESD-301 opened (manual override)"))
         elif action == "inlet_close":
             self.inlet_valve = False
             self.inlet_override_until = self.clock + 30.0
-            events.append(PlantEvent("VALVE_STATE", "Inlet valve closed (manual override)"))
+            events.append(PlantEvent("VALVE_STATE", "ESD-301 closed (manual override)"))
         elif action == "setpoint" and value is not None:
             old = self.setpoint
             self.setpoint = max(0.0, min(100.0, float(value)))
-            events.append(PlantEvent("SETPOINT", f"Level setpoint {old:.0f} -> {self.setpoint:.0f} %"))
+            events.append(PlantEvent("SETPOINT", f"Tank farm level setpoint {old:.0f} -> {self.setpoint:.0f} %"))
+        elif action == "dra_rate" and value is not None:
+            old = self.dra_rate
+            self.dra_rate = max(0.0, min(100.0, float(value)))
+            events.append(PlantEvent("SETPOINT", f"DRA injection {old:.0f} -> {self.dra_rate:.0f} %"))
         elif action == "maintenance_on":
             self.maintenance = True
             self.mode = "MAINTENANCE"
-            events.append(PlantEvent("MODE", "Plant entered MAINTENANCE mode"))
+            events.append(PlantEvent("MODE", "Station entered MAINTENANCE mode"))
         elif action == "maintenance_off":
             self.maintenance = False
             self.mode = "AUTO"
-            events.append(PlantEvent("MODE", "Plant returned to AUTO mode"))
+            events.append(PlantEvent("MODE", "Station returned to AUTO mode"))
         elif action == "mode_manual":
             self.mode = "MANUAL"
-            events.append(PlantEvent("MODE", "Plant switched to MANUAL mode"))
+            events.append(PlantEvent("MODE", "Station switched to MANUAL mode"))
         elif action == "mode_auto":
             self.mode = "MAINTENANCE" if self.maintenance else "AUTO"
-            events.append(PlantEvent("MODE", "Plant switched to AUTO mode"))
+            events.append(PlantEvent("MODE", "Station switched to AUTO mode"))
         return events
 
     def sim_hook(self, payload: dict[str, Any]) -> list[PlantEvent]:
-        """Simulator-only hooks; the station has none beyond telemetry hold and reset."""
+        """Simulator-only hooks; the pump station has none beyond telemetry hold and reset."""
         return []
 
     # ------------------------------------------------------------------ physics
@@ -136,7 +151,7 @@ class Plant:
         return self._accumulate_conditions(dt)
 
     def _level_control(self) -> None:
-        """AUTO mode: the PLC holds level at setpoint with the inlet valve."""
+        """AUTO mode: the RTU holds tank farm level at setpoint with ESD-301."""
         if self.mode not in ("AUTO", "MAINTENANCE"):
             return
         if self.clock < self.inlet_override_until:
@@ -161,7 +176,7 @@ class Plant:
         if not self.pump or not self.outlet_valve:
             return 0.0                                    # check valve, no gravity bypass
         head_factor = 0.82 + 0.18 * (self.level / 100.0)  # more head, slightly more flow
-        return config.PUMP_RATED_FLOW_LPM * head_factor * self._suction_factor()
+        return config.PUMP_RATED_FLOW_LPM * head_factor * self._suction_factor() * dra_factor(self.dra_rate)
 
     def _deadheading(self) -> bool:
         return self.pump and not self.outlet_valve
@@ -190,20 +205,20 @@ class Plant:
             self.dry_run_s = 0.0
 
         events += self._edge("DEADHEAD", self.deadhead_s > 2.0, "PHYSICAL",
-                             "Pump is running against a closed discharge path",
+                             "P-101 running against closed MOV-201 — surge, pressure rising to shut-off",
                              "Discharge path restored", "HIGH")
         events += self._edge("OVERPRESSURE", self.pressure > config.PRESSURE_MAX_BAR, "PHYSICAL",
-                             f"Discharge pressure above the {config.PRESSURE_MAX_BAR:.1f} bar operating limit",
+                             f"Discharge pressure above the {config.PRESSURE_MAX_BAR:.1f} bar segment MAOP",
                              "Discharge pressure back inside the operating envelope", "HIGH")
         events += self._edge("DRY_RUN", self.dry_run_s > 2.0, "PHYSICAL",
-                             "Pump is running with insufficient suction level (cavitation risk)",
+                             "P-101 running with insufficient suction — cavitation",
                              "Suction level recovered", "HIGH")
         events += self._edge("LOW_LEVEL", self.level < config.LEVEL_MIN_PCT, "PROCESS",
-                             f"Tank level below the {config.LEVEL_MIN_PCT:.0f} % low limit",
-                             "Tank level recovered", "MEDIUM")
+                             f"Tank farm level below the {config.LEVEL_MIN_PCT:.0f} % low limit",
+                             "Tank farm level recovered", "MEDIUM")
         events += self._edge("HIGH_LEVEL", self.level > config.LEVEL_MAX_PCT, "PROCESS",
-                             f"Tank level above the {config.LEVEL_MAX_PCT:.0f} % high limit",
-                             "Tank level back inside limits", "MEDIUM")
+                             f"Tank farm level above the {config.LEVEL_MAX_PCT:.0f} % high limit — ullage exhausted",
+                             "Tank farm level back inside limits", "MEDIUM")
         return events
 
     def _edge(self, flag: str, active: bool, kind: str, on_msg: str, off_msg: str,
@@ -230,6 +245,7 @@ class Plant:
             inlet_valve=self.inlet_valve,
             outlet_valve=self.outlet_valve,
             setpoint=round(self.setpoint, 1),
+            dra_rate=round(self.dra_rate, 1),
             mode=self.mode,
             maintenance=self.maintenance,
             pump_runtime_s=round(self.pump_runtime_s, 1),

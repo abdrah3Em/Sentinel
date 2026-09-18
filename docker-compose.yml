@@ -1,14 +1,14 @@
 # One-command demo environment:  docker compose up
 #   grid simulation         ->  http://localhost:8080
-#   oil pipeline simulation ->  http://localhost:8081
+#   pipeline simulation     ->  http://localhost:8081
 x-grid: &grid
   build: .
   environment: [SENTINEL_MQTT_HOST=broker, SENTINEL_PROCESS=grid]
   depends_on: [broker]
   restart: unless-stopped
-x-oil: &oil
+x-pipeline: &pipeline
   build: .
-  environment: [SENTINEL_MQTT_HOST=broker, SENTINEL_PROCESS=oil]
+  environment: [SENTINEL_MQTT_HOST=broker, SENTINEL_PROCESS=pipeline]
   depends_on: [broker]
   restart: unless-stopped
 
@@ -33,14 +33,14 @@ services:
     command: python -m sentinel.api.app
     ports: ["8080:8080"]
 
-  plant-oil:
-    <<: *oil
+  plant-pipeline:
+    <<: *pipeline
     command: python -m sentinel.plant.run
     ports: ["5021:5021"]
-  guard-oil:
-    <<: *oil
+  guard-pipeline:
+    <<: *pipeline
     command: python -m sentinel.guard.run
-  dashboard-oil:
-    <<: *oil
+  dashboard-pipeline:
+    <<: *pipeline
     command: python -m sentinel.api.app
     ports: ["8081:8081"]

@@ -54,12 +54,12 @@ def stack():
         while time.time() < deadline and len(seen["telemetry"]) < 4:
             time.sleep(0.2)
     assert seen["telemetry"], "plant never published telemetry over MQTT"
-    # These tests script the oil station; a running feeder stack is a different process.
+    # These tests script the pump station; a running feeder stack is a different process.
     if "tank_level" not in seen["telemetry"][-1]:
         for service in services:
             service.running = False
         observer.stop()
-        pytest.skip("running stack is not the oil station (set SENTINEL_PROCESS=oil)")
+        pytest.skip("running stack is not the pump station (set SENTINEL_PROCESS=pipeline)")
     yield observer, seen
     for service in services:
         service.running = False
