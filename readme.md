@@ -40,7 +40,7 @@ Requires Python 3.10+ and Mosquitto (`sudo apt install mosquitto` / `brew instal
 
 ```bash
 pip install --require-hashes -r requirements.txt
-./run.sh                    
+./run.sh                          # broker + simulator + Modbus RTU + guard + console
 ```
 
 `run.sh` prints ready-to-open `http://localhost:8080/?token=…` (grid) and `:8081` (pipeline) links. `Ctrl-C` stops everything. In compose, `docker compose --profile pipeline up` adds the pump station.
@@ -182,7 +182,7 @@ python3 -m sentinel.attacks.modbus_inject --port 5021 coil 1 0      # close MOV-
 | **4. Pump start against a closed MOV-201** | State mismatch | The segment is isolated; an unexpected P-101 start arrives. | **HIGH · STATE-002** |
 | **5. Rapid actuator sequence** | Actuator flapping | Five actuator commands in four seconds. | **MEDIUM · SEQ-002 / SEQ-003** |
 | **6. Telemetry & command replay** | Sensor spoofing | A frozen RTU frame hides a draining tank farm; a captured command is replayed verbatim. | **TEL-002**, **CMD-001**, **Confidence LOW** |
-| **
+
 ---
 
 ## 🏗️ Repository Structure

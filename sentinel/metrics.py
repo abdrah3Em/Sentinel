@@ -289,23 +289,26 @@ def main() -> int:
     parser.add_argument("--check", action="store_true")
     args = parser.parse_args()
     body, block = build()
-    readme = splice(README_PATH, "<!-- metrics:start -->", "<!-- metrics:end -->", block)
+    readme_text = open(README_PATH).read() if os.path.exists(README_PATH) else ""
+    has_markers = "<!-- metrics:start -->" in readme_text and "<!-- metrics:end -->" in readme_text
+    readme = splice(README_PATH, "<!-- metrics:start -->", "<!-- metrics:end -->", block) if has_markers else readme_text
     if args.check:
         current = open(RESULTS_PATH).read() if os.path.exists(RESULTS_PATH) else ""
         drift = []
         if _normalise(current) != _normalise(body):
             drift.append("docs/RESULTS.md")
-        if _normalise(open(README_PATH).read()) != _normalise(readme):
+        if has_markers and _normalise(readme_text) != _normalise(readme):
             drift.append("readme.md")
         if drift:
             print("metrics drift in: " + ", ".join(drift))
             return 1
-        print("metrics up to date")
+        print("metrics up to date" + ("" if has_markers else " (README carries no metrics block)"))
         return 0
     if args.write:
         open(RESULTS_PATH, "w").write(body)
-        open(README_PATH, "w").write(readme)
-        print("wrote docs/RESULTS.md and the README metrics block")
+        if has_markers:
+            open(README_PATH, "w").write(readme)
+        print("wrote docs/RESULTS.md" + (" and the README metrics block" if has_markers else ""))
         return 0
     print(body)
     return 0
