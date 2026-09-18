@@ -159,13 +159,13 @@ python3 -m sentinel.attacks.modbus_inject coil 0 1            # cb_close, straig
 <!-- metrics:start -->
 - **133 offline tests pass**; 5 more run end to end over a live broker.
 - **11/11 attack scenarios** detected at their required level; **0 false positives** above LOW across 8 legitimate scenarios.
-- Flagship close-onto-fault: **CRITICAL · score 95**, raised the moment the command arrives (evaluation p95 **0.84 ms**).
+- Flagship close-onto-fault: **CRITICAL · score 95**, raised the moment the command arrives (evaluation p95 **5.82 ms**).
 - Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 <!-- metrics:end -->
 
 ---
 
-## 🔁 Second Process, Same Engine
+## 🛢️ Second Process, Same Engine: Crude Oil Pipeline
 
 The detector core is process-agnostic. A **crude oil pipeline pump station** — tank farm T-101, mainline pump P-101, sectionalising valve MOV-201, emergency shutdown valve ESD-301, DRA injection — runs on the same engine behind one flag as a portability proof, never as a parallel story:
 
@@ -211,13 +211,6 @@ Sentinel/
 More detail: [`QUICKSTART.md`](QUICKSTART.md).
 
 ---
-
-## 👥 Credits and Contributions
-
-* **abdrah3Em** — project lead, distribution-feeder model, detection engine, console.
-* **DanonymousCoder** — command dispatcher, mobile alerting, early process modelling.
-
-Contributions are welcome by pull request against `main`; `make test`, `make demo` and `make check-metrics` must pass, and every number in this README comes from `make metrics`, never by hand.
 
 ## 📜 License
 

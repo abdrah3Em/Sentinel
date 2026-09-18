@@ -34,7 +34,7 @@ def domain() -> ModuleType:
     return import_module(f"sentinel.domains.{active_id()}")
 
 
-CONSOLE_LABELS = {"grid": "Grid simulation", "pipeline": "Pipeline simulation"}
+CONSOLE_LABELS = {"grid": "Grid simulation", "pipeline": "Oil pipeline simulation"}
 
 
 def consoles() -> list[dict]:

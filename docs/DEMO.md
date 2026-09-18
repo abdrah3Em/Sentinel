@@ -27,7 +27,7 @@ Open the console with the printed `?token=…` link. Overview view, dark theme, 
 | **T+2:20** | "Same command, different moment." | Wait; the scenario clears the fault, resets protection, closes. | Quiet. All buses back. |
 | **T+2:50** | "Now the attacker hides the picture." | Scenarios → **5 Telemetry & command replay** → Run. | Sequence counter stops. Telemetry tag **replay suspected**. Confidence **LOW** on every advisory. |
 | **T+3:20** | "Behind the frozen frame the sectionaliser opens. The display says the hospital is supplied. Sentinel says it cannot verify that, raises the advisory anyway, and asks for local confirmation." | — | STATE-005 at LOW confidence; CMD-001 on the replayed command. |
-| **T+3:50** | "Advisory only. The engineer decides. Same engine, second process, one flag." | Optional: sidebar → *Pipeline simulation*. | 20 seconds, no more. |
+| **T+3:50** | "Advisory only. The engineer decides. Same engine, second process, one flag." | Optional: sidebar → *Oil pipeline simulation*. | 20 seconds, no more. |
 
 ## Fallback (30 seconds, no console)
 

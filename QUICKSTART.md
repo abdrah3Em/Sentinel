@@ -33,7 +33,7 @@ pip install -r requirements.txt      # pinned, hash-checked
 | Console | URL | Process |
 |---|---|---|
 | Grid simulation (the demo) | **http://localhost:8080** | 11 kV feeder: T1/OLTC, CB-101, SW-102, TS-201, PV-1, hospital bus B3 |
-| Pipeline simulation | **http://localhost:8081** | tank farm T-101, mainline pump P-101, MOV-201, ESD-301, DRA skid |
+| Oil pipeline simulation | **http://localhost:8081** | tank farm T-101, mainline pump P-101, MOV-201, ESD-301, DRA skid |
 
 `Ctrl-C` stops everything; logs are in `./logs` (one `plant-`, `guard-` and `api-` log per process).
 

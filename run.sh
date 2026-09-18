@@ -130,7 +130,7 @@ echo
 echo "✔ SENTINEL is running"
 echo "  Operator token:       $TOKEN"
 [ "$ONLY" = "pipeline" ] || echo "  Grid simulation:      http://localhost:$GRID_PORT/?token=$TOKEN"
-[ "$ONLY" = "grid" ] || echo "  Pipeline simulation:  http://localhost:$PIPELINE_PORT/?token=$TOKEN"
+[ "$ONLY" = "grid" ] || echo "  Oil pipeline:         http://localhost:$PIPELINE_PORT/?token=$TOKEN"
 echo "  Attack CLI:  $PY -m sentinel.attacks.run --list   (SENTINEL_PROCESS=pipeline for the pump station)"
 echo "  Logs in:     ./$LOGS/"
 echo "  Press Ctrl-C to stop."

@@ -23,7 +23,7 @@ __all__ = ["ID", "Plant", "Telemetry", "ALL_ACTIONS", "SCENARIOS", "NARRATIVES",
 
 ID = "pipeline"
 TITLE = "Crude oil pipeline pump station · T-101 / P-101 / MOV-201 · simulated"
-SHORT = "Pipeline simulation"
+SHORT = "Oil pipeline simulation"
 CONSEQUENTIAL = {"pump_start", "pump_stop", "outlet_open", "outlet_close", "inlet_open", "inlet_close",
                  "setpoint", "dra_rate"}
 COMMAND_RULES = _rules.COMMAND_RULES
@@ -82,7 +82,7 @@ def mode_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
 def descriptor() -> dict[str, Any]:
     """What the dashboard needs to draw this process."""
     return {
-        "id": ID, "title": TITLE, "short": SHORT, "brand": "Pipeline simulation", "consoles": process.consoles(),
+        "id": ID, "title": TITLE, "short": SHORT, "brand": "Oil pipeline simulation", "consoles": process.consoles(),
         "process_sub": "T-101 → ESD-301 → P-101 → MOV-201 → mainline",
         "kpis": [
             {"key": "pressure", "label": "Discharge pressure", "unit": "bar", "dp": 2, "min": 0, "max": 7,

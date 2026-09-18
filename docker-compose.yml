@@ -1,6 +1,6 @@
 # One command for the judges:  docker compose up
 #   grid simulation (the demo) ->  http://localhost:8080   Modbus TCP RTU on 5020
-#   pipeline simulation        ->  http://localhost:8081   Modbus TCP RTU on 5021   (profile "pipeline")
+#   oil pipeline simulation    ->  http://localhost:8081   Modbus TCP RTU on 5021   (profile "pipeline")
 # The operator token is printed by the dashboard container:
 #   docker compose logs dashboard-grid | grep token
 x-sentinel: &sentinel
