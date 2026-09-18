@@ -183,11 +183,11 @@ def test_every_command_produces_an_assessment_even_when_quiet():
 def test_process_alerts_are_not_repeated_every_second():
     rig = Rig()
     rig.publish_telemetry()
-    rig.advance(12, publish=False)
-    first = rig.guard.evaluate_process(now=rig.now)
+    rig.advance(12, publish=False)              # periodic checks run inside advance()
+    stale = [a for a in rig.guard.alerts if a.rule == "TEL-001"]
+    assert len(stale) == 1                      # nine seconds of staleness, one advisory
     rig.now += 1.0
-    second = rig.guard.evaluate_process(now=rig.now)
-    assert first is not None and second is None
+    assert rig.guard.evaluate_process(now=rig.now) is None
 
 
 def test_status_reports_the_worst_recent_alert():
@@ -306,8 +306,9 @@ def test_baseline_flags_a_source_commanding_far_faster_than_its_history():
     rig = Rig()
     for _ in range(22):
         rig.send("inlet_open", source="operator-hmi", settle=30)         # one command every 30 s is normal here
-    rig.advance(0.5)
-    assert "BASE-001" in _findings_for(rig, "inlet_open")
+    rig.send("inlet_open", source="operator-hmi", settle=0)              # on cadence: fine
+    rig.now += 0.5
+    assert "BASE-001" in _findings_for(rig, "inlet_open")               # half a second later: not this source
     rig.advance(30)
     assert "BASE-001" not in _findings_for(rig, "inlet_open")
 

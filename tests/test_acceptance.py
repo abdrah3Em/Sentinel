@@ -102,8 +102,8 @@ def test_replayed_telemetry_is_flagged():
 def test_stale_telemetry_is_flagged_even_without_replay():
     rig = Rig()
     rig.publish_telemetry()
-    rig.advance(12, publish=False)
-    alert = rig.guard.evaluate_process(now=rig.now)
+    rig.advance(12, publish=False)              # the harness runs the guard's periodic check itself
+    alert = next((a for a in rig.guard.alerts if a.rule == "TEL-001"), None)
     assert alert is not None and alert.rule == "TEL-001"
     assert rig.guard.status(now=rig.now)["telemetry_fresh"] is False
 
