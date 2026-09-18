@@ -530,13 +530,16 @@ body.ready .scale i { transition: width 0.4s var(--ease), background-color var(-
   .topbar { height: auto; flex-wrap: wrap; padding: 10px 16px; gap: 10px 16px; }
   .topbar-right .tag.clock, .topbar-right .tag.tel { display: none; }
   .content { padding: 16px; }
-  .tiles, .equipment { grid-template-columns: 1fr 1fr; }
+  .tiles, .equipment { --cols: 2; }
   .tile:nth-child(2n + 1), .equipment > div:nth-child(2n + 1) { border-left: 0; }
   .tile:nth-child(n + 3), .equipment > div:nth-child(n + 3) { border-top: 1px solid var(--hairline); }
+  .nav-consoles, .nav-label { display: none; }
 }
 @media (max-width: 600px) {
-  .tiles, .equipment, .posture, .adv-grid { grid-template-columns: 1fr; }
+  .tiles, .equipment { --cols: 1; }
+  .posture, .adv-grid { grid-template-columns: 1fr; }
   .tile, .equipment > div { border-left: 0 !important; }
+  .tile-val b { font-size: 28px; letter-spacing: -0.8px; }
   .tile + .tile, .equipment > div + div { border-top: 1px solid var(--hairline); }
   .posture > div + div { border-left: 0; border-top: 1px solid var(--hairline); }
   .score { font-size: var(--text-heading-lg); letter-spacing: var(--tracking-heading-lg); }
@@ -614,3 +617,4 @@ body.ready .scale i { transition: width 0.4s var(--ease), background-color var(-
 .director-log .t { font-family: var(--font-geist-mono); font-size: var(--text-caption); color: var(--muted); }
 #director-toggle.on { border-color: var(--orange); color: var(--orange); }
 .mimic .gv.left { text-anchor: start; }
+.about-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: var(--gap); }

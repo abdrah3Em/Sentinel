@@ -28,8 +28,10 @@ MODBUS = {
               3: ("protection_reset", None), 4: ("avc_auto", "avc_manual")},
     "registers": {0: ("tap_set", 1.0), 1: ("avc_target", 0.01), 2: ("pv_curtail", 1.0)},
     "inputs": [("v_bus_kv", 100), ("v_b3_kv", 100), ("i_feeder_a", 1), ("tap", 1), ("cb_closed", 1),
-               ("sw_closed", 1), ("tie_closed", 1), ("protection_tripped", 1)],
+               ("sw_closed", 1), ("tie_closed", 1), ("protection_tripped", 1), ("v_b4_kv", 100), ("i_f2_a", 1)],
+    "discrete": ["cb_closed", "sw_closed", "tie_closed", "cb2_closed", "protection_tripped", "fault_present"],
 }
+MODBUS_PORT = config.MODBUS_PORTS["grid"]
 
 
 def thresholds() -> dict:

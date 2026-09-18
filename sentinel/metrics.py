@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import statistics
 import subprocess
 import sys
@@ -157,9 +158,6 @@ def test_count() -> tuple[int, int]:
     passed = skipped = 0
     for line in proc.stdout.splitlines()[::-1]:
         if "passed" in line:
-            for part in line.replace(",", " ").split():
-                pass
-            import re
             m1 = re.search(r"(\d+) passed", line)
             m2 = re.search(r"(\d+) skipped", line)
             passed = int(m1.group(1)) if m1 else 0
@@ -310,10 +308,10 @@ def _normalise(text: str) -> str:
     """Timing numbers vary run to run; compare everything except the timed lines."""
     keep = []
     for line in text.splitlines():
-        if " ms" in line and ("p50" in line or "p95" in line or "| " in line and "ms" in line):
-            continue
+        if " ms" in line or re.match(r"^\| \d+ \| [\d.]+ \| [\d.]+ \| [\d.]+ \| [\d.]+ \|$", line):
+            continue                                   # wall-clock timings vary run to run
         keep.append(line.rstrip())
-    return "\n".join(keep)
+    return "\n".join(keep).strip()
 
 
 if __name__ == "__main__":

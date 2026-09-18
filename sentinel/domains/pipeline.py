@@ -36,7 +36,9 @@ MODBUS = {
     "registers": {0: ("setpoint", 1.0), 1: ("dra_rate", 1.0)},
     "inputs": [("tank_level", 10), ("pressure", 100), ("flow", 1), ("setpoint", 1), ("pump", 1),
                ("outlet_valve", 1), ("inlet_valve", 1), ("maintenance", 1), ("dra_rate", 1)],
+    "discrete": ["pump", "outlet_valve", "inlet_valve", "maintenance"],
 }
+MODBUS_PORT = config.MODBUS_PORTS["pipeline"]
 
 
 def thresholds() -> dict:

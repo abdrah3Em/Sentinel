@@ -41,6 +41,7 @@ TOPIC_STATUS = f"{TOPIC_NS}/guard/status"
 
 TOPIC_CONTROL = f"{TOPIC_NS}/sentinel/control"   # demo housekeeping (reset), not a plant path
 TOPIC_SIM = f"{TOPIC_NS}/plant/sim"              # simulator-only hooks (fault inject, telemetry hold) — never the guard
+TOPIC_MODBUS = f"{TOPIC_NS}/modbus/frames"       # decoded Modbus/TCP frames from the RTU tap
 
 # --------------------------------------------------------------------------
 # API / dashboard

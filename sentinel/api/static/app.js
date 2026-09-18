@@ -139,7 +139,7 @@ function applyDescriptor(d) {
 /* ================================================================ router */
 const PAGES = {
   overview: ['Monitor', 'Overview'], advisories: ['Monitor', 'Advisories'], timeline: ['Monitor', 'Timeline'],
-  scenarios: ['Operate', 'Scenarios'], rules: ['Operate', 'Detection rules'],
+  scenarios: ['Operate', 'Scenarios'], rules: ['Operate', 'Detection rules'], about: ['System', 'About'],
 };
 function route() {
   const view = (location.hash || '#overview').slice(1);
@@ -152,6 +152,7 @@ function route() {
   window.scrollTo({ top: 0 });
   renderAll();
   if (S.view === 'rules') renderBaseline();
+  if (S.view === 'about') renderAbout();
 }
 window.addEventListener('hashchange', route);
 
@@ -513,6 +514,7 @@ function timelineRows() {
     if (e.type === 'SCENARIO') { if (DIRECTOR) rows.push({ ts: e.ts, kind: 'demo', type: badge('demo', p.phase === 'START' || p.phase === 'END' ? 'Scenario' : 'Narration'), text: d, source: e.source, q: d }); }
     else if (e.type === 'COMMAND_ACCEPTED') { const as = byCmd.get(p.command_id);
       rows.push({ ts: e.ts, kind: 'cmd', type: badge('accent', 'Command'), text: d, source: e.source, verdict: as ? (as.verdict === 'NORMAL' ? badge('ok', 'Consistent') : badge(as.verdict, `${title(as.verdict)} · ${as.score}`)) : '', q: d }); }
+    else if (e.type === 'MODBUS') rows.push({ ts: e.ts, kind: 'modbus', type: badge(p.write ? 'warn' : 'plain', p.write ? 'Modbus write' : 'Modbus read'), text: d, source: e.source, q: d });
     else if (e.type === 'PHYSICAL' || e.type === 'PROCESS' || e.type === 'PROTECTION') rows.push({ ts: e.ts, kind: 'physical', type: badge(p.severity === 'HIGH' ? 'crit' : p.severity === 'MEDIUM' ? 'warn' : 'plain', title(e.type)), text: d, source: e.source, q: d });
     else rows.push({ ts: e.ts, kind: 'other', type: badge('plain', title(e.type.replace(/_/g, ' '))), text: d || JSON.stringify(p), source: e.source, q: d });
   }
@@ -593,6 +595,24 @@ function renderBaseline() {
   for (const [a, v] of acts) rows.push([`Range · ${a}`, configuredFor(a), v.p05 == null ? '—' : `${v.p05} – ${v.p95}${v.ready ? '' : ' (learning)'}`, `${v.samples} / ${b.min_samples}`]);
   for (const [src, s] of srcs) if (Object.keys(s.mix || {}).length) rows.push([`Command mix · ${src}`, b.configured.mix, Object.entries(s.mix).map(([a, f]) => `${a} ${Math.round(f * 100)} %`).join(' · '), `${Object.values(s.mix).length} actions`]);
   tb.innerHTML = rows.map((r) => `<tr><td class="msg">${esc(r[0])}</td><td class="muted">${esc(r[1])}</td><td>${esc(r[2])}</td><td class="mono">${esc(r[3])}</td></tr>`).join('');
+}
+async function renderAbout() {
+  const tile = (k, v) => `<div class="threshold"><span class="eyebrow">${esc(k)}</span><b>${esc(v)}</b></div>`;
+  $('about-facts').innerHTML = [
+    ['Process', D ? D.title : '—'], ['Transports', 'Modbus TCP (RTU + wire tap) · MQTT adapter'],
+    ['Write path to the plant', 'none — advisory only'], ['Command envelopes', 'HMAC per source · sequence · nonce · freshness'],
+    ['Guard state', 'SQLite WAL, survives restart'], ['Network at runtime', 'none — self-hosted fonts, CSP self-only'],
+  ].map(([k, v]) => tile(k, v)).join('');
+  $('about-trust').innerHTML = [
+    ['Inside', 'guard process and its state · signing master · rule weights · operator token'],
+    ['Outside', 'anything that reaches the broker or the RTU · the telemetry path · every scenario attacker'],
+    ['Not defended', 'a valid key on a compromised workstation · a wholly consistent forged world · DoS on broker or RTU'],
+  ].map(([k, v]) => `<div class="policy-item"><span class="eyebrow">${k}</span><p>${esc(v)}</p></div>`).join('');
+  try {
+    const r = await (await fetch('/api/results')).json();
+    $('about-version').textContent = r.version || '';
+    $('about-results').innerHTML = (r.headline || []).map(([k, v]) => tile(k, v)).join('') || '<div class="empty">Run make metrics</div>';
+  } catch (e) { $('about-results').innerHTML = '<div class="empty">Results unavailable</div>'; }
 }
 function renderRules() {
   renderBaseline();

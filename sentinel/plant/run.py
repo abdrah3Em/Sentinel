@@ -61,6 +61,10 @@ class PlantService:
         with self.lock:
             return self.plant.snapshot()
 
+    def on_modbus_frame(self, frame: dict) -> None:
+        """Every decoded Modbus/TCP frame, both directions, from the RTU's wire tap."""
+        self.bus.publish(config.TOPIC_MODBUS, {"ts": now_ms(), **frame})
+
     def on_sim_control(self, topic: str, payload: dict) -> None:
         """Hooks used only by the attack simulator to model a compromised link."""
         if "telemetry_hold_s" in payload:
@@ -100,8 +104,9 @@ class PlantService:
         if config.MODBUS_PORT and getattr(self.domain, "MODBUS", None):
             m = self.domain.MODBUS
             try:
-                self.modbus = ModbusIngress(config.MODBUS_PORT, ModbusMap(m["coils"], m["registers"], m["inputs"]),
-                                            self.on_modbus_write, self._modbus_state).start()
+                self.modbus = ModbusIngress(config.MODBUS_PORT,
+                                            ModbusMap(m["coils"], m["registers"], m["inputs"], m.get("discrete")),
+                                            self.on_modbus_write, self._modbus_state, on_frame=self.on_modbus_frame).start()
             except OSError as e:
                 log.warning("modbus tcp ingress not started on %s: %s", config.MODBUS_PORT, e)
 
