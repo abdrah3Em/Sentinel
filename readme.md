@@ -40,9 +40,7 @@ Requires Python 3.10+ and Mosquitto (`sudo apt install mosquitto` / `brew instal
 
 ```bash
 pip install --require-hashes -r requirements.txt
-./run.sh                          # the feeder: broker + simulator + Modbus RTU + guard + console
-./run.sh --profile pipeline       # the oil pipeline pump station instead
-./run.sh --profile both           # both consoles; each sidebar links to the other
+./run.sh                    
 ```
 
 `run.sh` prints ready-to-open `http://localhost:8080/?token=…` (grid) and `:8081` (pipeline) links. `Ctrl-C` stops everything. In compose, `docker compose --profile pipeline up` adds the pump station.
@@ -65,7 +63,7 @@ make metrics         # regenerate docs/RESULTS.md and the numbers below from a r
 One 11 kV radial feeder **F1**: a 33/11 kV transformer with an on-load tap changer under automatic voltage control, feeder breaker **CB-101**, sectionaliser **SW-102**, normally-open tie **TS-201** to feeder **F2** (its own transformer and breaker **CB-201**), a 2 MWp PV plant, and load groups including **hospital bus B3**. The physics is a forward-backward sweep power flow: per-section voltage drop, path-dependent fault current, protection trips, source paralleling with circulating current, and a tap changer that obediently walks the busbar out of statutory limits when commanded to.
 
 **Physics modelled:** close-onto-fault (fault current, re-trip, switchgear stress), open under load (customers off, customer-minutes-lost), uncontrolled parallel, per-section permits-to-work, concurrent faults, AVC drift out of the ±6 % band.
-**Full PRD:** [`docs/PRD-v2-distribution-grid.md`](docs/PRD-v2-distribution-grid.md).
+
 
 ### Oil — crude oil pipeline pump station (`http://localhost:8081`)
 
@@ -184,20 +182,7 @@ python3 -m sentinel.attacks.modbus_inject --port 5021 coil 1 0      # close MOV-
 | **4. Pump start against a closed MOV-201** | State mismatch | The segment is isolated; an unexpected P-101 start arrives. | **HIGH · STATE-002** |
 | **5. Rapid actuator sequence** | Actuator flapping | Five actuator commands in four seconds. | **MEDIUM · SEQ-002 / SEQ-003** |
 | **6. Telemetry & command replay** | Sensor spoofing | A frozen RTU frame hides a draining tank farm; a captured command is replayed verbatim. | **TEL-002**, **CMD-001**, **Confidence LOW** |
-| **7. Legitimate maintenance isolation** | Context awareness | The same P-101 stop and MOV-201 close under declared maintenance. | **Nothing above LOW · CTX-001** |
-| **8–10. Planned shutdown, start-up, normal operations** | False-positive checks | Correctly sequenced isolation and restoration; routine trims. | **Quiet**. |
-
----
-
-## 📊 Results
-
-<!-- metrics:start -->
-- **133 offline tests pass**; 5 more run end to end over a live broker.
-- **11/11 attack scenarios** detected at their required level; **0 false positives** above LOW across 8 legitimate scenarios.
-- Flagship close-onto-fault: **CRITICAL · score 95**, raised the moment the command arrives (evaluation p95 **5.82 ms**).
-- Full tables: [docs/RESULTS.md](docs/RESULTS.md).
-<!-- metrics:end -->
-
+| **
 ---
 
 ## 🏗️ Repository Structure
