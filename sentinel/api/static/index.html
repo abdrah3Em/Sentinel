@@ -7,11 +7,7 @@
 <link rel="stylesheet" href="/static/fonts/fonts.css">
 <link rel="stylesheet" href="/static/styles.css">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 3l7 3v5c0 5-3.5 8.5-7 10-3.5-1.5-7-5-7-10V6z'/%3E%3C/svg%3E">
-<script>
-  // Dark is the design's native theme; apply a saved/requested light theme before first paint.
-  try { const t = new URLSearchParams(location.search).get('theme') || localStorage.getItem('sentinel-theme');
-    if (t === 'light') document.documentElement.dataset.theme = 'light'; } catch (e) {}
-</script>
+<script src="/static/theme.js"></script>
 </head>
 <body>
 <svg width="0" height="0" style="position:absolute" aria-hidden="true">
@@ -67,6 +63,7 @@
         <span class="tag tel" id="tag-telemetry">Tel <b id="tel-age">—</b><span>·</span>Seq <b id="tel-seq">—</b></span>
         <span class="tag clock" id="clock">--:--:--</span>
         <span class="tag" id="tag-lock" title="Write endpoints require the operator token" hidden><span class="dot ok"></span>Token</span>
+        <button class="btn ghost" id="director-toggle" title="Presenter script and scenario narration — off in judge mode">Director</button>
         <button class="btn ghost icon" id="theme" title="Toggle theme"><svg><use href="#i-sun"/></svg></button>
         <button class="btn ghost" id="reset"><svg><use href="#i-reset"/></svg>Reset demo</button>
       </div>
@@ -235,7 +232,7 @@
             <button class="chip" data-f="alert">Advisories</button>
             <button class="chip" data-f="cmd">Commands</button>
             <button class="chip" data-f="physical">Process</button>
-            <button class="chip" data-f="demo">Scenarios</button>
+            <button class="chip" data-f="demo" id="chip-demo" hidden>Narration</button>
           </div>
           <div class="right"><input class="input search" id="tl-search" placeholder="Search events…"><span class="muted" id="tl-count"></span></div>
         </div>
@@ -276,6 +273,11 @@
     </div>
   </div>
 </div>
+<aside class="director" id="director" hidden>
+  <div class="director-head"><span class="eyebrow"><i class="dot bad"></i>Director</span><span class="muted" id="director-sub">judge mode off · narration visible</span><button class="btn ghost sm" id="director-close">Close</button></div>
+  <p class="director-note">A real plant has no narrator. Nothing here reaches the operator timeline unless the director panel is open.</p>
+  <ol class="director-log" id="director-log"></ol>
+</aside>
 <div class="toast" id="toast"></div>
 <script src="/static/app.js"></script>
 </body>

@@ -9,6 +9,7 @@ the browser over SSE (no extra dependencies, no websocket server to babysit).
 from __future__ import annotations
 
 import csv
+import hmac
 import io
 import json
 import logging
@@ -136,12 +137,24 @@ def require_operator_token():
     """Write endpoints (commands, scenarios, reset, simulator hooks) can be gated by a
     shared operator token.  Reads stay open: the console is an observer's screen.
     The guard itself has no write path either way."""
-    if not config.CONSOLE_TOKEN or request.method != "POST" or not request.path.startswith("/api/"):
+    if request.method != "POST" or not request.path.startswith("/api/"):
         return None
     supplied = request.headers.get("X-Sentinel-Token") or request.args.get("token", "")
-    if supplied != config.CONSOLE_TOKEN:
+    if not supplied or not hmac.compare_digest(supplied, config.CONSOLE_TOKEN):
         return jsonify({"ok": False, "error": "operator token required"}), 401
     return None
+
+
+@app.after_request
+def lock_down(response):
+    """The console never talks to anything but its own origin: no CDN, no fonts, no analytics."""
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'; "
+        "base-uri 'none'; form-action 'none'")
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    return response
 
 
 @app.get("/")
@@ -322,6 +335,8 @@ def main() -> None:
                         format="%(asctime)s  %(name)-16s %(levelname)-7s %(message)s")
     dashboard.start()
     log.info("dashboard on http://localhost:%s", config.API_PORT)
+    log.info("operator token: %s  →  open http://localhost:%s/?token=%s", config.CONSOLE_TOKEN,
+             config.API_PORT, config.CONSOLE_TOKEN)
     app.run(host=config.API_HOST, port=config.API_PORT, threaded=True,
             debug=False, use_reloader=False)
 

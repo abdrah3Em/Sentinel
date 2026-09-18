@@ -60,7 +60,40 @@ DB_PATH = os.environ.get(
 # --------------------------------------------------------------------------
 # Notifications / Dispatcher (Field Engineer Alerts)
 # --------------------------------------------------------------------------
-CONSOLE_TOKEN = os.environ.get("SENTINEL_CONSOLE_TOKEN", "")   # when set, write endpoints need X-Sentinel-Token
+CONSOLE_TOKEN_PATH = os.environ.get(
+    "SENTINEL_CONSOLE_TOKEN_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "console-token"),
+)
+
+
+def _console_token() -> str:
+    """The operator token every mutating console endpoint requires.
+
+    Taken from SENTINEL_CONSOLE_TOKEN if set; otherwise generated once on first run,
+    stored next to the databases and printed by run.sh and the console log."""
+    token = os.environ.get("SENTINEL_CONSOLE_TOKEN", "").strip()
+    if token:
+        return token
+    try:
+        with open(CONSOLE_TOKEN_PATH) as f:
+            token = f.read().strip()
+        if token:
+            return token
+    except OSError:
+        pass
+    import secrets
+    token = secrets.token_urlsafe(18)
+    try:
+        os.makedirs(os.path.dirname(CONSOLE_TOKEN_PATH), exist_ok=True)
+        fd = os.open(CONSOLE_TOKEN_PATH, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        with os.fdopen(fd, "w") as f:
+            f.write(token + "\n")
+    except OSError:
+        pass
+    return token
+
+
+CONSOLE_TOKEN = _console_token()
 WEBHOOK_URL = os.environ.get("SENTINEL_WEBHOOK_URL", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("SENTINEL_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("SENTINEL_TELEGRAM_CHAT_ID", "")
