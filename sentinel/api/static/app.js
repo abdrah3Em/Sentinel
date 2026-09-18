@@ -111,13 +111,13 @@ function applyDescriptor(d) {
   }).join('');
   $('foot-process').textContent = d.short;
   $('process-sub').textContent = d.process_sub;
-  const tiles = $('tiles'); tiles.style.setProperty('--cols', d.kpis.length);
+  const tiles = $('tiles'); tiles.style.setProperty('--cols-desktop', d.kpis.length);
   tiles.innerHTML = d.kpis.map((k) => `<div class="tile" id="kpi-${k.key}" style="--spark:${CV[k.spark] || CV.green}">
     <div class="tile-top"><span class="eyebrow">${esc(k.label)}</span><span class="badge plain" id="kpi-${k.key}-badge">—</span></div>
     <div class="tile-val"><b id="v-${k.key}">—</b><span>${esc(k.unit)}</span></div>
     <svg class="spark" id="sp-${k.key}" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
     <div class="tile-foot" id="kpi-${k.key}-foot">${esc(fmtTpl(k.foot, {}))}</div></div>`).join('');
-  const eq = $('equipment'); eq.style.setProperty('--cols', d.equipment.length);
+  const eq = $('equipment'); eq.style.setProperty('--cols-desktop', d.equipment.length);
   eq.innerHTML = d.equipment.map((e) => `<div><div class="eq-icon" id="eq-${e.key}-i"><svg><use href="#i-${esc(e.icon)}"/></svg></div>
     <div><div class="eq-name">${esc(e.label)}</div><div class="eq-state" id="eq-${e.key}">—</div></div></div>`).join('');
   $('legend').innerHTML = d.trend.series.map((s) => `<span class="${s.dash ? 'dash' : ''}" style="--c:${CV[s.color]}">${esc(s.label)}</span>`).join('');

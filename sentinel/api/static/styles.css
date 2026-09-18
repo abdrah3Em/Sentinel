@@ -550,8 +550,8 @@ body.ready .scale i { transition: width 0.4s var(--ease), background-color var(-
 }
 
 /* ------------------------------------------------------------------ process-descriptor layouts */
-.tiles { grid-template-columns: repeat(var(--cols, 4), 1fr); }
-.equipment { grid-template-columns: repeat(var(--cols, 4), 1fr); }
+/* --cols-desktop comes from the process descriptor (inline); --cols from the breakpoints below wins on small screens */
+.tiles, .equipment { grid-template-columns: repeat(var(--cols, var(--cols-desktop, 4)), 1fr); }
 .form-row .input, .form-row .select { width: auto; }
 .form-row .input[type="number"] { width: 96px; }
 .form-row .input[type="text"] { width: 120px; }
