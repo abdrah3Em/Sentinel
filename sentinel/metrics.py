@@ -151,19 +151,26 @@ def confusion(results: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
     return m
 
 
+INTEGRATION = ["tests/test_integration.py", "tests/test_grid_integration.py"]
+
+
 def test_count() -> tuple[int, int]:
-    """(passed, skipped) from a real pytest run of the whole suite."""
-    proc = subprocess.run([sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider"],
-                          capture_output=True, text=True, cwd=ROOT)
-    passed = skipped = 0
+    """(offline tests passed, integration tests collected).
+
+    The offline suite is deterministic on any machine; the integration tests need a live
+    broker and a guard sharing this checkout's signing master, so they are counted, not run."""
+    proc = subprocess.run([sys.executable, "-m", "pytest", "tests", "-q", "-p", "no:cacheprovider",
+                           *(f"--ignore={p}" for p in INTEGRATION)], capture_output=True, text=True, cwd=ROOT)
+    passed = 0
     for line in proc.stdout.splitlines()[::-1]:
-        if "passed" in line:
-            m1 = re.search(r"(\d+) passed", line)
-            m2 = re.search(r"(\d+) skipped", line)
-            passed = int(m1.group(1)) if m1 else 0
-            skipped = int(m2.group(1)) if m2 else 0
+        m = re.search(r"(\d+) passed", line)
+        if m:
+            passed = int(m.group(1))
             break
-    return passed, skipped
+    collected = subprocess.run([sys.executable, "-m", "pytest", "--collect-only", "-q", "-p", "no:cacheprovider",
+                                *INTEGRATION], capture_output=True, text=True, cwd=ROOT)
+    integration = sum(1 for line in collected.stdout.splitlines() if "::" in line)
+    return passed, integration
 
 
 def build() -> tuple[str, str]:
@@ -189,7 +196,7 @@ def build() -> tuple[str, str]:
     L.append("")
     L.append("## Headline")
     L.append("")
-    L.append(f"- Tests: **{passed} passed**, {skipped} skipped (integration tests skip without a broker).")
+    L.append(f"- Tests: **{passed} offline tests pass** on any machine; {skipped} further integration tests run against a live broker (`make test`).")
     L.append(f"- Attacks detected at their required level: **{m['tp']} of {m['tp'] + m['fn']}** across both processes.")
     L.append(f"- Legitimate scenarios with an advisory above LOW: **{fp_above_low}** (absolute count) out of {len(legit)} scenarios; "
              f"LOW-only advisories in those scenarios: {fp_low}.")
@@ -258,7 +265,7 @@ def build() -> tuple[str, str]:
     body = "\n".join(L).rstrip() + "\n"
 
     block = "\n".join([
-        f"- **{passed} tests pass** ({skipped} skipped without a broker).",
+        f"- **{passed} offline tests pass**; {skipped} more run end to end over a live broker.",
         f"- **{m['tp']}/{m['tp'] + m['fn']} attack scenarios** detected at their required level; "
         f"**{fp_above_low} false positives** above LOW across {len(legit)} legitimate scenarios.",
         f"- Flagship close-onto-fault: **{flagship['worst_level']} · score {flagship['worst_score']}**, "

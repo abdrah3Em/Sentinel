@@ -41,9 +41,10 @@ def stack():
     for name, topic in GRID_TOPICS.items():          # services read config at call time
         setattr(config, name, topic)
     observer = Bus("gitest").connect()
-    seen = {"alerts": [], "telemetry": []}
+    seen = {"alerts": [], "telemetry": [], "assessments": []}
     observer.subscribe(config.TOPIC_ALERT, lambda t, p: seen["alerts"].append(p))
     observer.subscribe(config.TOPIC_TELEMETRY, lambda t, p: seen["telemetry"].append(p))
+    observer.subscribe(config.TOPIC_ASSESSMENT, lambda t, p: seen["assessments"].append(p))
     time.sleep(2.0)
     services = []
     if not seen["telemetry"]:
@@ -55,6 +56,19 @@ def stack():
         while time.time() < deadline and len(seen["telemetry"]) < 4:
             time.sleep(0.2)
     assert seen["telemetry"] and "v_bus_kv" in seen["telemetry"][-1], "no feeder telemetry on grid/plant/telemetry"
+    # A guard that was started from another checkout holds another signing master; our
+    # envelopes would be (correctly) rejected as forged, so the verdicts below would not apply.
+    probe = Command(action="avc_target", source="operator-hmi", value=11.0)
+    observer.publish(config.TOPIC_COMMAND, probe.to_dict())
+    deadline = time.time() + 6
+    while time.time() < deadline and not any(a["command"]["id"] == probe.id for a in seen["assessments"]):
+        time.sleep(0.1)
+    verdicts = [a for a in seen["assessments"] if a["command"]["id"] == probe.id]
+    if not services and (not verdicts or verdicts[0].get("signature") != "ok"):
+        for name, topic in saved.items():
+            setattr(config, name, topic)
+        observer.stop()
+        pytest.skip("the running guard uses a different signing master than this checkout (as designed)")
     try:
         yield observer, seen
     finally:

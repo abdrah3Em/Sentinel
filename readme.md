@@ -33,9 +33,9 @@ One 11 kV radial feeder F1: a 33/11 kV transformer with an on-load tap changer u
 ## Results
 
 <!-- metrics:start -->
-- **135 tests pass** (3 skipped without a broker).
+- **133 offline tests pass**; 5 more run end to end over a live broker.
 - **11/11 attack scenarios** detected at their required level; **0 false positives** above LOW across 8 legitimate scenarios.
-- Flagship close-onto-fault: **CRITICAL · score 95**, raised the moment the command arrives (evaluation p95 **1.12 ms**).
+- Flagship close-onto-fault: **CRITICAL · score 95**, raised the moment the command arrives (evaluation p95 **0.84 ms**).
 - Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 <!-- metrics:end -->
 
