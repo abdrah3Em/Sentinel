@@ -130,7 +130,7 @@ def test_integrity_tracks_repeats_and_regressions():
     for _ in range(4):
         integrity.observe(Telemetry(seq=3))
     assert integrity.repeat_count == 4
-    integrity.observe(Telemetry(seq=1))
+    integrity.observe(Telemetry(seq=1, ts=integrity.last_ts - 1000))   # older stamp: replay, not a restart
     assert integrity.regressions == 1
 
 
@@ -284,3 +284,45 @@ def test_reset_forgets_history_and_status():
     rig.guard.reset()
     assert rig.guard.status(now=rig.now)["level"] == "NORMAL"
     assert rig.guard.commands_seen == 0 and not rig.guard.alerts
+
+
+# --- learned baseline -------------------------------------------------------
+def _findings_for(rig, action, value=None, source="operator-hmi"):
+    command = Command(action=action, source=source, value=value)
+    command.ts = int(rig.now * 1000)
+    return {f.rule for f in rules.evaluate_command(rig.guard.state, command, rig.now)}
+
+
+def test_baseline_flags_a_value_outside_learned_history_but_not_before_learning():
+    rig = Rig()
+    assert "BASE-001" not in _findings_for(rig, "setpoint", 64)          # nothing learned yet
+    for i in range(24):                                                    # a shift of ordinary trims, 58–62 %
+        rig.send("setpoint", 58 + (i % 5), settle=3)
+    assert "BASE-001" not in _findings_for(rig, "setpoint", 60)
+    assert "BASE-001" in _findings_for(rig, "setpoint", 64)               # inside ±5 %, outside the learned range
+
+
+def test_baseline_flags_a_source_commanding_far_faster_than_its_history():
+    rig = Rig()
+    for _ in range(22):
+        rig.send("inlet_open", source="operator-hmi", settle=30)         # one command every 30 s is normal here
+    rig.advance(0.5)
+    assert "BASE-001" in _findings_for(rig, "inlet_open")
+    rig.advance(30)
+    assert "BASE-001" not in _findings_for(rig, "inlet_open")
+
+
+# --- persistence --------------------------------------------------------------
+def test_guard_snapshot_restores_history_baseline_and_advisories():
+    rig = Rig()
+    rig.send("outlet_close", source="maintenance-laptop", settle=2)
+    for i in range(3):
+        rig.send("setpoint", 60 + i, settle=2)
+    data = rig.guard.snapshot()
+    fresh = CommandGuard()
+    fresh.restore(data)
+    assert len(fresh.alerts) == len(rig.guard.alerts) and fresh.alerts[0].rule == rig.guard.alerts[0].rule
+    assert len(fresh.state.history.items) == len(rig.guard.state.history.items)
+    assert fresh.state.history.times_seen(rig.guard.state.history.items[-1].id) == 1
+    assert fresh.commands_seen == rig.guard.commands_seen
+    assert fresh.state.baseline.values["setpoint"] == rig.guard.state.baseline.values["setpoint"]

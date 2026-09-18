@@ -1,4 +1,17 @@
-# One-command demo environment:  docker compose up  ->  http://localhost:8080
+# One-command demo environment:  docker compose up
+#   grid simulation         ->  http://localhost:8080
+#   oil pipeline simulation ->  http://localhost:8081
+x-grid: &grid
+  build: .
+  environment: [SENTINEL_MQTT_HOST=broker, SENTINEL_PROCESS=grid]
+  depends_on: [broker]
+  restart: unless-stopped
+x-oil: &oil
+  build: .
+  environment: [SENTINEL_MQTT_HOST=broker, SENTINEL_PROCESS=oil]
+  depends_on: [broker]
+  restart: unless-stopped
+
 services:
   broker:
     image: eclipse-mosquitto:2
@@ -6,22 +19,28 @@ services:
     volumes:
       - ./mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
     ports: ["1883:1883"]
+    restart: unless-stopped
 
-  plant:
-    build: .
+  plant-grid:
+    <<: *grid
     command: python -m sentinel.plant.run
-    environment: [SENTINEL_MQTT_HOST=broker]
-    depends_on: [broker]
-
-  guard:
-    build: .
+    ports: ["5020:5020"]
+  guard-grid:
+    <<: *grid
     command: python -m sentinel.guard.run
-    environment: [SENTINEL_MQTT_HOST=broker]
-    depends_on: [broker]
-
-  dashboard:
-    build: .
+  dashboard-grid:
+    <<: *grid
     command: python -m sentinel.api.app
-    environment: [SENTINEL_MQTT_HOST=broker]
     ports: ["8080:8080"]
-    depends_on: [broker, plant, guard]
+
+  plant-oil:
+    <<: *oil
+    command: python -m sentinel.plant.run
+    ports: ["5021:5021"]
+  guard-oil:
+    <<: *oil
+    command: python -m sentinel.guard.run
+  dashboard-oil:
+    <<: *oil
+    command: python -m sentinel.api.app
+    ports: ["8081:8081"]

@@ -14,43 +14,67 @@ MQTT_HOST = os.environ.get("SENTINEL_MQTT_HOST", "127.0.0.1")
 MQTT_PORT = int(os.environ.get("SENTINEL_MQTT_PORT", "1883"))
 MQTT_KEEPALIVE = 30
 
-TOPIC_TELEMETRY = "plant/telemetry"
-TOPIC_COMMAND = "plant/command"
-TOPIC_EVENT = "plant/event"
-TOPIC_MODE = "plant/mode"
+# --------------------------------------------------------------------------
+# Simulated process: "grid" (11 kV distribution feeder, PRD rev 2 — the primary
+# console) or "oil" (crude oil pumping station: tank, transfer pump, pipeline
+# valves — the liquid-transfer hydraulics of PRD rev 1).  Each process runs as
+# its own plant + guard + console; they share one broker under separate topic
+# namespaces.  Everything below the engine is shared code.
+# --------------------------------------------------------------------------
+PROCESS = os.environ.get("SENTINEL_PROCESS", "grid").strip().lower()
+CONSOLE_PORTS = {
+    "grid": int(os.environ.get("SENTINEL_GRID_PORT", "8080")),
+    "oil": int(os.environ.get("SENTINEL_OIL_PORT", "8081")),
+}
 
-TOPIC_ALERT = "guard/alert"
-TOPIC_ASSESSMENT = "guard/assessment"
-TOPIC_STATUS = "guard/status"
+MODBUS_PORTS = {"grid": 5020, "oil": 5021}
+MODBUS_PORT = int(os.environ.get("SENTINEL_MODBUS_PORT", MODBUS_PORTS.get(PROCESS, 0)))   # 0 disables
 
-TOPIC_CONTROL = "sentinel/control"   # demo housekeeping (reset), not a plant path
+TOPIC_NS = os.environ.get("SENTINEL_TOPIC_NS", PROCESS)   # e.g. grid/plant/telemetry, oil/plant/telemetry
+TOPIC_TELEMETRY = f"{TOPIC_NS}/plant/telemetry"
+TOPIC_COMMAND = f"{TOPIC_NS}/plant/command"
+TOPIC_EVENT = f"{TOPIC_NS}/plant/event"
+TOPIC_MODE = f"{TOPIC_NS}/plant/mode"
+
+TOPIC_ALERT = f"{TOPIC_NS}/guard/alert"
+TOPIC_ASSESSMENT = f"{TOPIC_NS}/guard/assessment"
+TOPIC_STATUS = f"{TOPIC_NS}/guard/status"
+
+TOPIC_CONTROL = f"{TOPIC_NS}/sentinel/control"   # demo housekeeping (reset), not a plant path
+TOPIC_SIM = f"{TOPIC_NS}/plant/sim"              # simulator-only hooks (fault inject, telemetry hold) — never the guard
 
 # --------------------------------------------------------------------------
 # API / dashboard
 # --------------------------------------------------------------------------
 API_HOST = os.environ.get("SENTINEL_API_HOST", "0.0.0.0")
-API_PORT = int(os.environ.get("SENTINEL_API_PORT", "8080"))
+API_PORT = int(os.environ.get("SENTINEL_API_PORT", CONSOLE_PORTS.get(PROCESS, 8080)))
+GUARD_STATE_PATH = os.environ.get(
+    "SENTINEL_GUARD_STATE",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", f"guard-{PROCESS}.json"),
+)
+GUARD_STATE_MAX_AGE_S = 3600.0        # older snapshots are ignored on start
 DB_PATH = os.environ.get(
     "SENTINEL_DB",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "sentinel.db"),
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", f"sentinel-{PROCESS}.db"),
 )
 
 # --------------------------------------------------------------------------
 # Notifications / Dispatcher (Field Engineer Alerts)
 # --------------------------------------------------------------------------
+CONSOLE_TOKEN = os.environ.get("SENTINEL_CONSOLE_TOKEN", "")   # when set, write endpoints need X-Sentinel-Token
 WEBHOOK_URL = os.environ.get("SENTINEL_WEBHOOK_URL", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("SENTINEL_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("SENTINEL_TELEGRAM_CHAT_ID", "")
 DISPATCH_MIN_LEVEL = os.environ.get("SENTINEL_DISPATCH_MIN_LEVEL", "HIGH")
 
 # --------------------------------------------------------------------------
-# Process simulation
+# Process simulation — oil pumping station (flows in m³/h, level in %, bar)
 # --------------------------------------------------------------------------
 TELEMETRY_PERIOD_S = 0.5          # 2 Hz telemetry, per PRD section 12
 SIM_TICK_S = 0.1                  # physics integration step
 
-TANK_CAPACITY_L = 500.0           # litres at 100 %
-INLET_FLOW_LPM = 120.0            # inlet valve fully open, gravity fed
+TANK_CAPACITY_L = 500.0           # tank volume units at 100 % (flow units per minute × 60 = m³/h)
+INLET_FLOW_LPM = 120.0            # gathering inlet fully open
 PUMP_RATED_FLOW_LPM = 95.0        # free-discharge flow at rated speed
 PUMP_SHUTOFF_HEAD_BAR = 6.4       # dead-headed pump pressure (physical ceiling)
 PUMP_MIN_SUCTION_LEVEL = 8.0      # below this the pump starts to cavitate
@@ -103,6 +127,41 @@ TRUSTED_SOURCES = {"operator-hmi", "plc-controller", "scada-auto"}
 MAINTENANCE_SOURCES = {"maintenance-laptop", "maintenance-hmi"}
 
 # --------------------------------------------------------------------------
+# Distribution feeder F1 (PRD revision 2, sections 11-12, 19-20)
+# --------------------------------------------------------------------------
+GRID_NOMINAL_KV = 11.0
+GRID_SOURCE_KV = 33.0
+GRID_F2_KV = 11.0                      # alternate feeder, modelled as a strong source
+GRID_TAP_STEP_PCT = 1.25
+GRID_TAP_MIN, GRID_TAP_MAX = -8, 8
+GRID_TAP_STEP_TIME_S = 4.0             # OLTC mechanical step time
+GRID_AVC_DEADBAND_PCT = 0.75
+GRID_AVC_TARGET_MIN_KV, GRID_AVC_TARGET_MAX_KV = 10.6, 11.4
+GRID_MANUAL_OVERRIDE_S = 60.0          # a manual tap command holds the AVC off this long
+GRID_V_MIN_KV, GRID_V_MAX_KV = 10.34, 11.66          # statutory ±6 %
+GRID_V_WARN_LOW_KV, GRID_V_WARN_HIGH_KV = 10.5, 11.5
+GRID_I_RATING_A, GRID_I_WARN_A = 400.0, 360.0
+GRID_SECTIONS = {"S1": (0.40, 0.60), "S2": (0.60, 0.90), "S3": (0.40, 0.60)}   # R, X in ohms
+GRID_LOADS_KW = {"b1": 1800.0, "b2": 2400.0, "b3": 900.0}
+GRID_CUSTOMERS = {"b1": 1800, "b2": 45, "b3": 1}
+GRID_CRITICAL_BUS = "b3"               # the hospital
+GRID_LOAD_PF = 0.95
+GRID_PV_RATED_KW = 2000.0
+GRID_FAULT_CURRENT_KA = 6.5
+GRID_TRIP_DELAY_S = 0.10               # protection operating time
+GRID_FAULT_FLASH_S = 0.15              # fault current flows this long on a close-onto-fault
+GRID_PARALLEL_STANDING_S = 60.0
+GRID_DIURNAL_PERIOD_S = 600.0          # a "day" of load in ten minutes
+GRID_AVC_NORMAL_DELTA_KV = 0.15        # layer 4 — a normal operator trim of the AVC target
+GRID_AVC_LARGE_DELTA_KV = 0.40
+GRID_TAP_NORMAL_DELTA, GRID_TAP_LARGE_DELTA = 1, 3
+GRID_DRIFT_NET_KV = 0.30               # cumulative AVC-target movement that counts as a drift
+GRID_PHYSICS_RESIDUAL_KV = 0.30        # PHY-001 — bus voltage disagreeing with tap and source
+GRID_LOADED_A = 10.0                   # above this the feeder breaker is "carrying load"
+GRID_TRUSTED_SOURCES = {"operator-hmi", "scada-auto", "dms-controller"}
+GRID_PROGRAM_SOURCES = {"engineering-laptop", "field-crew"}   # accepted inside a switching program
+
+# --------------------------------------------------------------------------
 # Risk model (Detection layer weights — PRD sections 24 & 25)
 # --------------------------------------------------------------------------
 WEIGHTS = {
@@ -134,6 +193,23 @@ WEIGHTS = {
     "MAINTENANCE_CONTEXT": -30,
     "MAINTENANCE_EXPECTED": -20,
     "PUMP_STOPPING": -25,
+    # --- distribution feeder (PRD rev 2 section 24) ---
+    "FAULT_PRESENT": 40,
+    "PROTECTION_TRIPPED": 20,
+    "CRITICAL_LOAD": 15,
+    "LOSS_OF_SUPPLY": 35,
+    "BREAKER_LOADED": 20,
+    "UNCONTROLLED_PARALLEL": 30,
+    "PTW_ENERGISE": 35,
+    "PTW_CREW": 25,
+    "TAP_AT_LIMIT": 30,
+    "CURTAIL_UNDER_STRESS": 25,
+    "BREAKER_PUMPING": 15,
+    "NOT_IN_PROGRAM": 10,
+    "PROGRAM_CONTEXT": -30,
+    "FAULT_CLEARED": -25,
+    "ALTERNATE_PATH": -25,
+    "BASELINE_DEVIATION": 10,
 }
 
 SEVERITY_BANDS = [(80, "CRITICAL"), (60, "HIGH"), (30, "MEDIUM"), (0, "LOW")]

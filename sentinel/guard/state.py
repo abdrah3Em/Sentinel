@@ -11,8 +11,9 @@ from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Deque, Optional
 
-from .. import config
+from .. import config, process
 from ..models import Command, Telemetry
+from .baseline import Baseline
 
 CLEAN_RUN_TO_CLEAR = 20      # consecutive good frames that clear a past regression
 
@@ -139,19 +140,21 @@ class ProcessState:
     telemetry: Optional[Telemetry] = None
     integrity: TelemetryIntegrity = field(default_factory=TelemetryIntegrity)
     history: CommandHistory = field(default_factory=CommandHistory)
+    baseline: Baseline = field(default_factory=Baseline)
     residual_since: Optional[float] = None
     setpoint_samples: Deque[tuple[int, float]] = field(default_factory=lambda: deque(maxlen=4000))
 
-    def update(self, frame: Telemetry, arrival: float | None = None) -> None:
+    def update(self, frame: Any, arrival: float | None = None) -> None:
         # A replayed frame must not overwrite a newer picture of the plant.
         if self.telemetry is None or frame.ts >= self.telemetry.ts:
             self.telemetry = frame
         self.integrity.observe(frame, arrival)
-        self.setpoint_samples.append((frame.ts, frame.setpoint))
+        domain = process.domain()
+        self.setpoint_samples.append((frame.ts, domain.setpoint_of(frame)))
         # Instrument lag is normal for a second or two after a state change; only a
         # persistent mismatch between physics and telemetry is meaningful.
         arrival = arrival if arrival is not None else time.time()
-        if self.flow_residual() > config.PHYSICS_RESIDUAL_LPM:
+        if self.residual() > domain.PHYSICS_THRESHOLD:
             self.residual_since = self.residual_since or arrival
         else:
             self.residual_since = None
@@ -174,24 +177,24 @@ class ProcessState:
     def known(self) -> bool:
         return self.telemetry is not None
 
-    def expected_flow(self) -> float:
-        """Digital twin: the flow the physics says we should be seeing."""
-        t = self.telemetry
-        if t is None or not t.pump or not t.outlet_valve:
-            return 0.0
-        suction = 1.0 if t.tank_level >= config.PUMP_MIN_SUCTION_LEVEL else max(
-            0.0, t.tank_level / config.PUMP_MIN_SUCTION_LEVEL) ** 1.5
-        head_factor = 0.82 + 0.18 * (t.tank_level / 100.0)
-        return config.PUMP_RATED_FLOW_LPM * head_factor * suction
-
-    def flow_residual(self) -> float:
+    def expected(self) -> float:
+        """Digital twin: what the physics says the key measurement should read."""
         if self.telemetry is None:
             return 0.0
-        return abs(self.expected_flow() - self.telemetry.flow)
+        return process.domain().physics_residual(self.telemetry)[0]
+
+    def residual(self) -> float:
+        if self.telemetry is None:
+            return 0.0
+        return process.domain().physics_residual(self.telemetry)[1]
+
+    # Station-era names, kept for the oil tests and narratives.
+    expected_flow = expected
+    flow_residual = residual
 
     def to_dict(self, now: float | None = None) -> dict[str, Any]:
         data = self.telemetry.to_dict() if self.telemetry else {}
         data["integrity"] = self.integrity.to_dict(now)
-        data["expected_flow"] = round(self.expected_flow(), 1)
-        data["flow_residual"] = round(self.flow_residual(), 1)
+        data["physics_expected"] = data["expected_flow"] = round(self.expected(), 2)
+        data["physics_residual"] = data["flow_residual"] = round(self.residual(), 2)
         return data

@@ -9,13 +9,10 @@ import time
 from collections import deque
 from typing import Any, Callable, Deque, Optional
 
-from .. import config
-from ..models import Alert, Command, Event, Telemetry, now_ms
+from .. import config, process
+from ..models import Alert, Command, Event, now_ms
 from . import dispatcher, risk, rules
 from .state import ProcessState
-
-CONSEQUENTIAL = {"pump_start", "pump_stop", "outlet_open", "outlet_close",
-                 "inlet_open", "inlet_close", "setpoint"}
 
 PROCESS_ALERT_REPEAT_S = 30.0     # how often a persisting condition re-alerts
 
@@ -34,7 +31,7 @@ class CommandGuard:
 
     # ------------------------------------------------------------------ inputs
     def observe_telemetry(self, payload: dict[str, Any], now: float | None = None) -> None:
-        self.state.update(Telemetry.from_dict(payload), arrival=now or time.time())
+        self.state.update(process.domain().Telemetry.from_dict(payload), arrival=now or time.time())
 
     def observe_command(self, payload: dict[str, Any], now: float | None = None) -> Optional[Alert]:
         now = now or time.time()
@@ -53,12 +50,13 @@ class CommandGuard:
                                  confidence, uncertainty)
 
         verdict = alert.level if alert else "NORMAL"
-        quiet = ("Consistent with current process state" if command.action in CONSEQUENTIAL
+        quiet = ("Consistent with current process state" if command.action in process.domain().CONSEQUENTIAL
                  else f"{command.action} is an operational mode change")
         self._record_assessment(command, findings, total, verdict,
                                 alert.summary if alert else quiet, now)
         if alert:
             self._emit(alert, now)
+        self.state.baseline.observe(command)       # learn from it only after judging it
         return alert
 
     def evaluate_process(self, now: float | None = None) -> Optional[Alert]:
@@ -94,9 +92,8 @@ class CommandGuard:
         now = now or time.time()
         integ = self.state.integrity
         if integ.last_seq is None:
-            return "LOW", ("No telemetry has been received, so this could not be checked against the "
-                           "live process. Sentinel does not block: the advisory is raised at low "
-                           "confidence and the plant state must be confirmed by other means.")
+            return "LOW", ("No telemetry received — nothing to check against. Sentinel does not block; "
+                           "the plant must be confirmed locally.")
         age = max(integ.age_s(now), integ.gap_s(now))
         if not integ.trusted(now):
             cause = ("replay-suspect" if integ.repeat_count >= config.REPLAY_REPEAT_COUNT
@@ -104,16 +101,39 @@ class CommandGuard:
             detail = f"age {age:.0f} s, seq {integ.last_seq}"
             if integ.repeat_count:
                 detail += f" repeated ×{integ.repeat_count}"
-            return "LOW", (f"Telemetry is {cause} ({detail}), so this assessment is based on a state "
-                           "that may no longer be real. Sentinel does not block; it raises the advisory "
-                           "anyway, treats the displayed state as unverified, and asks for the plant to "
-                           "be confirmed locally before anyone acts.")
+            return "LOW", (f"Telemetry is {cause} ({detail}) — the displayed state may not be real. "
+                           "Sentinel does not block; the plant must be confirmed locally before anyone acts.")
         if self.state.residual_duration(now) >= config.PHYSICS_SETTLE_S:
-            return "REDUCED", ("Reported flow disagrees with the physics model, so the state used here "
-                               "may be wrong. Sentinel does not block — cross-check the instruments "
-                               "before acting on this advisory.")
-        return "HIGH", (f"Based on fresh, sequence-consistent telemetry (age {age:.1f} s, seq "
-                        f"{integ.last_seq}). Sentinel advises only; it has not acted on the plant.")
+            return "REDUCED", (f"Reported {process.domain().PHYSICS_LABEL} disagrees with the physics model. "
+                               "Sentinel does not block — cross-check the instruments first.")
+        return "HIGH", (f"Fresh, sequence-consistent telemetry (age {age:.1f} s, seq {integ.last_seq}). "
+                        "Sentinel has not acted on the plant.")
+
+    # ---------------------------------------------------------------- persistence
+    def snapshot(self) -> dict[str, Any]:
+        """Everything a restart would otherwise forget: history, baselines, advisories."""
+        return {
+            "saved_at": time.time(),
+            "commands": [c.to_dict() for c in self.state.history.items],
+            "ids": list(self.state.history.ids),
+            "setpoint_samples": list(self.state.setpoint_samples),
+            "baseline": self.state.baseline.to_dict(),
+            "alerts": [a.to_dict() for a in self.alerts],
+            "assessments": list(self.assessments),
+            "commands_seen": self.commands_seen,
+        }
+
+    def restore(self, data: dict[str, Any]) -> None:
+        from .baseline import Baseline
+        for c in data.get("commands", []):
+            self.state.history.items.append(Command.from_dict(c))
+        self.state.history.ids.extend(data.get("ids", []))
+        self.state.setpoint_samples.extend(tuple(s) for s in data.get("setpoint_samples", []))
+        self.state.baseline = Baseline.from_dict(data.get("baseline", {}))
+        for a in data.get("alerts", []):
+            self.alerts.append(Alert(**a))
+        self.assessments.extend(data.get("assessments", []))
+        self.commands_seen = int(data.get("commands_seen", 0))
 
     def reset(self) -> None:
         """Demo housekeeping: forget history so a fresh run starts clean."""
@@ -150,10 +170,7 @@ class CommandGuard:
         self.on_assessment(assessment)
 
     def _context_label(self) -> str:
-        t = self.state.telemetry
-        if t is None:
-            return "UNKNOWN"
-        return "MAINTENANCE" if (t.maintenance or t.mode == "MAINTENANCE") else t.mode
+        return process.domain().context_label(self.state.telemetry)
 
     # ------------------------------------------------------------------ status
     def status(self, now: float | None = None, window_s: float = 60.0) -> dict[str, Any]:

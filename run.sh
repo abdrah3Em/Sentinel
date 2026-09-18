@@ -90,24 +90,37 @@ else
 fi
 
 # 2. Services --------------------------------------------------------------
-echo "  plant       starting process simulator..."
-$PY -m sentinel.plant.run >"$LOGS/plant.log" 2>&1 &
-PIDS+=($!)
-sleep 0.5
+# Two simulated processes, each with its own plant, guard and console, sharing
+# the broker under separate topic namespaces (tank/... and grid/...).
+#   ./run.sh          both consoles
+#   ./run.sh grid     11 kV distribution feeder only
+#   ./run.sh oil      crude oil pumping station only
+ONLY="${1:-both}"
+GRID_PORT="${SENTINEL_GRID_PORT:-${SENTINEL_API_PORT:-8080}}"
+OIL_PORT="${SENTINEL_OIL_PORT:-8081}"
+export SENTINEL_GRID_PORT="$GRID_PORT" SENTINEL_OIL_PORT="$OIL_PORT"
 
-echo "  guard       starting command guard..."
-$PY -m sentinel.guard.run >"$LOGS/guard.log" 2>&1 &
-PIDS+=($!)
-sleep 0.5
+start_stack() {
+  local proc="$1" port="$2"
+  echo "  $proc: starting simulator, guard and console on port $port..."
+  SENTINEL_PROCESS="$proc" SENTINEL_API_PORT="$port" $PY -m sentinel.plant.run >"$LOGS/plant-$proc.log" 2>&1 &
+  PIDS+=($!)
+  sleep 0.5
+  SENTINEL_PROCESS="$proc" SENTINEL_API_PORT="$port" $PY -m sentinel.guard.run >"$LOGS/guard-$proc.log" 2>&1 &
+  PIDS+=($!)
+  sleep 0.5
+  SENTINEL_PROCESS="$proc" SENTINEL_API_PORT="$port" $PY -m sentinel.api.app >"$LOGS/api-$proc.log" 2>&1 &
+  PIDS+=($!)
+}
 
-API_PORT="${SENTINEL_API_PORT:-8080}"
-echo "  dashboard   starting web console on port $API_PORT..."
-$PY -m sentinel.api.app >"$LOGS/api.log" 2>&1 &
-PIDS+=($!)
+[ "$ONLY" = "oil" ] || start_stack grid "$GRID_PORT"
+[ "$ONLY" = "grid" ] || start_stack oil "$OIL_PORT"
 
 echo
-echo "✔ SENTINEL is running: http://localhost:$API_PORT"
-echo "  Attack CLI:  $PY -m sentinel.attacks.run --list"
+echo "✔ SENTINEL is running"
+[ "$ONLY" = "oil" ] || echo "  Grid simulation:          http://localhost:$GRID_PORT"
+[ "$ONLY" = "grid" ] || echo "  Oil pipeline simulation:  http://localhost:$OIL_PORT"
+echo "  Attack CLI:  $PY -m sentinel.attacks.run --list   (SENTINEL_PROCESS=oil for the station)"
 echo "  Logs in:     ./$LOGS/"
 echo "  Press Ctrl-C to stop."
 echo

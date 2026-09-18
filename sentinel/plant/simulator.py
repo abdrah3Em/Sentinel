@@ -1,4 +1,4 @@
-"""Physical model of the water treatment tank/pump skid.
+"""Physical model of a crude oil pumping station: storage tank, transfer pump, pipeline valves.
 
 The simulator is deliberately a plain, deterministic, dt-driven object with no
 I/O so it can be unit tested and driven at any speed.  It models the physical
@@ -106,6 +106,10 @@ class Plant:
             self.mode = "MAINTENANCE" if self.maintenance else "AUTO"
             events.append(PlantEvent("MODE", "Plant switched to AUTO mode"))
         return events
+
+    def sim_hook(self, payload: dict[str, Any]) -> list[PlantEvent]:
+        """Simulator-only hooks; the station has none beyond telemetry hold and reset."""
+        return []
 
     # ------------------------------------------------------------------ physics
     def step(self, dt: float) -> list[PlantEvent]:

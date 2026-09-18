@@ -1,8 +1,8 @@
 """Human-readable catalogue of the detection rules, for the dashboard and docs."""
 from __future__ import annotations
 
-from .. import config
-from .risk import RULE_NARRATIVE
+from .. import config, process
+from .risk import narratives
 
 W = config.WEIGHTS
 
@@ -49,35 +49,41 @@ RULES = [
     {"id": "TEL-003", "layer": "Integrity", "trigger": "sequence went backwards with an older timestamp",
      "weights": [("Regression", W["TELEMETRY_REGRESSION"])]},
     {"id": "PHY-001", "layer": "Physics",
-     "trigger": f"flow residual > {config.PHYSICS_RESIDUAL_LPM:.0f} L/min for {config.PHYSICS_SETTLE_S:.0f} s",
+     "trigger": f"flow residual > {config.PHYSICS_RESIDUAL_LPM:.0f} m³/h for {config.PHYSICS_SETTLE_S:.0f} s",
      "weights": [("Physics mismatch", W["PHYSICS_MISMATCH"])]},
     {"id": "SRC-001", "layer": "Context", "trigger": "unrecognised source, or maintenance host outside maintenance",
      "weights": [("Untrusted source", W["UNTRUSTED_SOURCE"])]},
+    {"id": "BASE-001", "layer": "Baseline", "trigger": "cadence or value outside this source's / action's learned history (≥ 20 samples)",
+     "weights": [("Baseline deviation", W["BASELINE_DEVIATION"])]},
     {"id": "CTX-001", "layer": "Context", "trigger": "plant in MAINTENANCE and command is an isolation/restoration step",
      "weights": [("Maintenance context", W["MAINTENANCE_CONTEXT"])]},
 ]
 
 
 def catalogue() -> list[dict]:
-    return [{**r, "title": RULE_NARRATIVE.get(r["id"], {}).get("summary", ""),
-             "weights": [{"label": k, "weight": v} for k, v in r["weights"]]} for r in RULES]
-
-
-POLICY = {
-    "when_unsure": ("Sentinel never blocks a command. When it cannot trust the state it is reasoning "
-                    "about — stale or replayed telemetry, instruments that disagree with the physics, "
-                    "no telemetry at all — it still raises the advisory, marks it LOW or REDUCED "
-                    "confidence, says exactly what it could not verify, and asks for the plant to be "
-                    "confirmed by other means before anyone acts."),
-    "never_blocks": ("Commands in the safe direction (pump stop, valve open, maintenance on) are never "
-                     "flagged as unsafe on their own. Blocking a genuine safety action can cause the "
-                     "accident it was meant to prevent, so the guard has no write path to the plant."),
-    "human_decides": ("Every advisory ends with one recommended verification step. The engineer "
-                      "decides; Sentinel records what it saw and why it was concerned."),
-}
+    text = narratives()
+    return [{**r, "title": text.get(r["id"], {}).get("summary", ""),
+             "weights": [{"label": k, "weight": v} for k, v in r["weights"]]}
+            for r in process.domain().RULES]
 
 
 def thresholds() -> dict:
+    return process.domain().thresholds()
+
+
+POLICY = {
+    "when_unsure": ("Stale, replayed or physically inconsistent telemetry never silences an advisory: it is "
+                    "raised at LOW or REDUCED confidence with a statement of what could not be verified."),
+    "never_blocks": ("Safe-direction commands (pump stop, valve open, maintenance on) are never flagged alone, "
+                     "and the guard has no write path to the plant."),
+    "human_decides": "Every advisory ends with one verification step. The engineer decides.",
+    "limits": ("Sentinel sees only what the broker carries: a spoofed source label passes SRC-001 and rewritten "
+               "sequence numbers pass TEL-002, so those weigh little; the physics check and the wrong-moment "
+               "rules judge the consequence instead."),
+}
+
+
+def tank_thresholds() -> dict:
     return {
         "severity_bands": [{"min": m, "level": l} for m, l in config.SEVERITY_BANDS],
         "alert_min_score": config.ALERT_MIN_SCORE,

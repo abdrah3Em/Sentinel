@@ -22,6 +22,11 @@ CREATE TABLE IF NOT EXISTS telemetry (
 );
 CREATE INDEX IF NOT EXISTS idx_telemetry_ts ON telemetry(ts);
 
+CREATE TABLE IF NOT EXISTS frames (
+    id INTEGER PRIMARY KEY AUTOINCREMENT, ts INTEGER NOT NULL, seq INTEGER, payload TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_frames_ts ON frames(ts);
+
 CREATE TABLE IF NOT EXISTS commands (
     id TEXT PRIMARY KEY, ts INTEGER NOT NULL, source TEXT, action TEXT, value REAL,
     verdict TEXT, score INTEGER
@@ -55,14 +60,10 @@ class Store:
 
     # ------------------------------------------------------------------ writes
     def add_telemetry(self, frame: dict[str, Any]) -> None:
+        """Frames are stored whole; the shape depends on the simulated process."""
         with self.lock:
-            self.db.execute(
-                "INSERT INTO telemetry (ts, seq, tank_level, pressure, flow, pump, inlet_valve,"
-                " outlet_valve, setpoint, mode, maintenance) VALUES (?,?,?,?,?,?,?,?,?,?,?)",
-                (frame.get("ts"), frame.get("seq"), frame.get("tank_level"), frame.get("pressure"),
-                 frame.get("flow"), int(bool(frame.get("pump"))), int(bool(frame.get("inlet_valve"))),
-                 int(bool(frame.get("outlet_valve"))), frame.get("setpoint"), frame.get("mode"),
-                 int(bool(frame.get("maintenance")))))
+            self.db.execute("INSERT INTO frames (ts, seq, payload) VALUES (?,?,?)",
+                            (frame.get("ts"), frame.get("seq"), json.dumps(frame)))
             self.db.commit()
 
     def add_command(self, command: dict[str, Any], verdict: str = "", score: int = 0) -> None:
@@ -118,19 +119,19 @@ class Store:
         """Recent telemetry, oldest first, for the trend chart."""
         with self.lock:
             rows = self.db.execute(
-                "SELECT ts, tank_level, pressure, flow, setpoint FROM telemetry"
-                " ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
-        return [dict(r) for r in reversed(rows)]
+                "SELECT payload FROM frames ORDER BY ts DESC LIMIT ?", (limit,)).fetchall()
+        return [json.loads(r["payload"]) for r in reversed(rows)]
 
     def clear(self) -> None:
         with self.lock:
-            for table in ("telemetry", "commands", "alerts", "events"):
+            for table in ("telemetry", "frames", "commands", "alerts", "events"):
                 self.db.execute(f"DELETE FROM {table}")
             self.db.commit()
 
     def prune(self, keep_telemetry: int = 5000) -> None:
         with self.lock:
-            self.db.execute(
-                "DELETE FROM telemetry WHERE id NOT IN"
-                " (SELECT id FROM telemetry ORDER BY id DESC LIMIT ?)", (keep_telemetry,))
+            for table in ("telemetry", "frames"):
+                self.db.execute(
+                    f"DELETE FROM {table} WHERE id NOT IN"
+                    f" (SELECT id FROM {table} ORDER BY id DESC LIMIT ?)", (keep_telemetry,))
             self.db.commit()

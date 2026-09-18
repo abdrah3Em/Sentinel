@@ -14,6 +14,8 @@ file is the run book.
 
 ![Sentinel overview during the flagship attack](docs/img/ui-overview.png)
 
+![Grid simulation during the close-onto-fault attack](docs/img/ui-grid-overview.png)
+
 The dashboard has five views — **Overview**, **Advisories**, **Timeline**, **Scenarios**
 and **Detection rules** — a sidebar console built on the design tokens in `design-sentinel/`,
 dark by default with a light theme (toggle in the top bar, or `?theme=light`). All
@@ -31,15 +33,25 @@ Requirements: Python 3.10+, `mosquitto` on the PATH.
 
 ```bash
 pip install -r requirements.txt      # paho-mqtt, flask, pytest
-./run.sh                             # broker + simulator + guard + dashboard
+./run.sh                             # broker + both simulated processes
+./run.sh tank                        # water skid only   (./run.sh grid: feeder only)
 ```
 
-Open **http://localhost:8080**. `Ctrl-C` stops everything; logs are in `./logs`.
+Two consoles come up, one per simulated process, and each sidebar links to the
+other under **Consoles**:
+
+| Console | URL | Process |
+|---|---|---|
+| Water plant simulation | **http://localhost:8080** | tank T-101, pump P-101, valves V-101/V-102 (PRD rev 1) |
+| Grid simulation | **http://localhost:8081** | 11 kV feeder: T1/OLTC, CB-101, SW-102, TS-201, PV-1, hospital bus B3 (PRD rev 2) |
+
+`Ctrl-C` stops everything; logs are in `./logs` (one `plant-`, `guard-` and
+`api-` log per process).
 
 ### Option B — Docker
 
 ```bash
-docker compose up --build            # same four services, same URL
+docker compose up --build            # broker + both process stacks, same URLs
 ```
 
 ### Option C — by hand (four terminals)
@@ -50,6 +62,11 @@ python -m sentinel.plant.run          # process simulator, 2 Hz telemetry
 python -m sentinel.guard.run          # the command guard
 python -m sentinel.api.app            # dashboard on :8080
 ```
+
+Every Sentinel process reads `SENTINEL_PROCESS` (`tank`, the default, or
+`grid`). Prefix the three commands with `SENTINEL_PROCESS=grid` for the feeder;
+its console defaults to port 8081 (`SENTINEL_GRID_PORT`). The two processes
+share the broker under separate topic namespaces (`tank/...`, `grid/...`).
 
 ### Tests
 
@@ -128,10 +145,21 @@ Suggested narrative (PRD sections 57–60):
 | `sentinel/guard/catalogue.py` | Rule catalogue and thresholds served to the *Detection rules* view. |
 | `sentinel/config.py` | Every threshold and weight, in one place. |
 
-MQTT topics: `plant/telemetry`, `plant/command`, `plant/event`, `plant/mode`,
+MQTT topics, each prefixed with the process namespace (`tank/` or `grid/`):
+`plant/telemetry`, `plant/command`, `plant/event`, `plant/mode`,
 `guard/alert`, `guard/assessment`, `guard/status` (retained), plus
-`plant/sim` (attack-simulator hook for telemetry blackout) and
+`plant/sim` (simulator-only hooks: telemetry blackout, fault inject/clear) and
 `sentinel/control` (demo reset).
+
+A switching program can name the equipment it covers — `switching_program_on`
+with value `SP-0417:CB-101,SW-102,TS-201,S1` — and only those steps are excused;
+a bare `SP-0417` covers the whole feeder.
+
+Process-specific code lives under `sentinel/domains/` (`tank.py`, `grid.py`):
+each binds its simulator (`plant/simulator.py`, `plant/grid.py`), rules
+(`guard/rules.py`, `guard/grid_rules.py`), narratives, rule catalogue,
+scenarios and the dashboard descriptor the console draws itself from. The
+engine, integrity tracking, risk arithmetic, API and dashboard shell are shared.
 
 REST: `GET /api/state · /api/status · /api/alerts · /api/events · /api/assessments ·
 /api/trend · /api/stats · /api/scenarios · /api/rules · /api/export/alerts.csv · /api/stream (SSE)`,

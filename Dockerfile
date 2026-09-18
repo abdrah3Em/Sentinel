@@ -5,5 +5,5 @@ RUN apt-get update && apt-get install -y --no-install-recommends mosquitto \
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-EXPOSE 8080
+EXPOSE 8080 8081
 CMD ["python", "-m", "sentinel.api.app"]

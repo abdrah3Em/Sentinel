@@ -34,6 +34,9 @@ class Bus:
             client_id=f"sentinel-{client_id}-{secrets.token_hex(3)}",
             clean_session=True,
         )
+        # Retry a lost or not-yet-available broker within seconds, not paho's default
+        # exponential back-off (which can leave a service silent for minutes under compose).
+        self._client.reconnect_delay_set(min_delay=1, max_delay=4)
         self._client.on_connect = self._on_connect
         self._client.on_disconnect = self._on_disconnect
         self._client.on_message = self._on_message

@@ -20,7 +20,7 @@ from typing import Any, Deque
 
 from flask import Flask, Response, jsonify, request, send_from_directory
 
-from .. import config
+from .. import config, process
 from ..attacks.scenarios import ScenarioRunner, catalogue
 from ..bus import Bus
 from ..guard.catalogue import catalogue as rule_catalogue, thresholds
@@ -89,9 +89,8 @@ class Dashboard:
         self.state = payload
         self.runner.note_telemetry(payload)
         self._telemetry_count += 1
-        self.trend.append({"ts": payload.get("ts"), "tank_level": payload.get("tank_level"),
-                           "pressure": payload.get("pressure"), "flow": payload.get("flow"),
-                           "setpoint": payload.get("setpoint")})
+        self.trend.append({"ts": payload.get("ts"),
+                           **{k: payload.get(k) for k in process.domain().TREND_KEYS}})
         self.hub.broadcast("telemetry", payload)
         if self._telemetry_count % 4 == 0:          # persist at ~0.5 Hz, plenty for a trend
             self.store.add_telemetry(payload)
@@ -132,6 +131,19 @@ app = Flask(__name__, static_folder="static", static_url_path="/static")
 
 
 # --------------------------------------------------------------------- routes
+@app.before_request
+def require_operator_token():
+    """Write endpoints (commands, scenarios, reset, simulator hooks) can be gated by a
+    shared operator token.  Reads stay open: the console is an observer's screen.
+    The guard itself has no write path either way."""
+    if not config.CONSOLE_TOKEN or request.method != "POST" or not request.path.startswith("/api/"):
+        return None
+    supplied = request.headers.get("X-Sentinel-Token") or request.args.get("token", "")
+    if supplied != config.CONSOLE_TOKEN:
+        return jsonify({"ok": False, "error": "operator token required"}), 401
+    return None
+
+
 @app.get("/")
 def index():
     return send_from_directory(app.static_folder, "index.html")
@@ -185,6 +197,22 @@ def api_stats():
         "telemetry_frames": dashboard._telemetry_count,
         "guard": dashboard.status,
     })
+
+
+@app.get("/api/process")
+def api_process():
+    return jsonify(process.domain().descriptor())
+
+
+@app.post("/api/sim")
+def api_sim():
+    """Simulator-only hooks for the demo console (fault inject/clear). Never a guard path."""
+    body = request.get_json(force=True, silent=True) or {}
+    hook = body.get("hook")
+    if hook not in ("fault_inject", "fault_clear"):
+        return jsonify({"ok": False, "error": "unknown simulator hook"}), 400
+    dashboard.bus.publish(config.TOPIC_SIM, {hook: body.get("value", True), "source": "operator-hmi"})
+    return jsonify({"ok": True, "hook": hook, "value": body.get("value", True)})
 
 
 @app.get("/api/rules")
@@ -262,6 +290,8 @@ def api_stream():
         q = dashboard.hub.subscribe()
         try:
             snapshot = json.dumps({"type": "snapshot", "data": {
+                "descriptor": process.domain().descriptor(),
+                "token_required": bool(config.CONSOLE_TOKEN),
                 "state": dashboard.state,
                 "status": dashboard.status,
                 "alerts": list(dashboard.alerts)[:40],

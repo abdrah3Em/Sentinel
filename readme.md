@@ -26,11 +26,13 @@ To ensure engineering rigor without vaporware, Sentinel employs a **process-agno
    * **Physics Modeled:** Dynamic dead-heading (pressure spiking to 6.4 bar shut-off head), suction cavitation, dry-running, hydrostatic pressure, and flow meter lags.  
    * **Full PRD:** [`docs/PRD-v1-water-tank.md`](docs/PRD-v1-water-tank.md).
 
-2. **Phase 2 Expansion Architecture (Formal Specification):**  
-   * **Process:** 11 kV Radial Electrical Distribution Feeder.  
-   * **Assets:** Tap-changing transformer, feeder circuit breaker, sectionalizer, normally-open tie, and PV plant inverter.  
-   * **Physics Modeled:** Closing onto standing faults, illegal source paralleling, and slow tap-changer voltage drift.  
-   * **Full Specification:** [`docs/PRD-v2-distribution-grid.md`](docs/PRD-v2-distribution-grid.md).
+2. **Distribution Grid Implementation (In Code & Live Demo, second console):**  
+   * **Process:** 11 kV Radial Electrical Distribution Feeder F1.  
+   * **Assets:** 33/11 kV transformer with on-load tap changer under AVC, feeder breaker CB-101, sectionaliser SW-102, normally-open tie TS-201 to feeder F2, 2 MWp PV plant, three load groups including a hospital bus.  
+   * **Physics Modeled:** Supply paths and customer-minutes-lost, per-section voltage drop, protection trips, close-onto-fault (6.5 kA, re-trip, switchgear stress), source paralleling with circulating current, and slow AVC-target drift walking the busbar out of statutory limits.  
+   * **Full PRD:** [`docs/PRD-v2-distribution-grid.md`](docs/PRD-v2-distribution-grid.md).
+
+Both processes run side by side from `./run.sh`: the water plant simulation on **http://localhost:8080** and the grid simulation on **http://localhost:8081**, sharing one MQTT broker under separate topic namespaces. `SENTINEL_PROCESS=tank|grid` selects the process for any single service.
 
 ---
 
@@ -140,6 +142,24 @@ python3 -m sentinel.attacks.run unsafe_valve
 | **6. Telemetry Replay** | Sensor spoofing | Attacker freezes telemetry frame while tank drains; sends old command. | **HIGH · TEL-002 & CMD-001** (Confidence marked LOW). |
 | **7. Legitimate Maintenance** | Context awareness | Engineer puts plant in `MAINTENANCE` and sends the exact same valve close. | **NORMAL / LOW · CTX-001** (Recognizes planned isolation). |
 
+### Grid simulation (`http://localhost:8081`)
+
+```bash
+SENTINEL_PROCESS=grid python3 -m sentinel.attacks.run close_onto_fault
+```
+
+| Scenario | Attack Type | What Happens on Screen | Verdict |
+|---|---|---|---|
+| **1. Close onto a standing fault (Flagship)** | Wrong-moment command | A fault on S2 trips CB-101 and darkens the hospital bus. A valid `cb_close` arrives from an engineering laptop before the fault is cleared. | **CRITICAL · STATE-001** (Score: 95). 6.5 kA fault-current flash on the mimic, re-trip, stress counter. Then crew clears, protection reset, operator closes: quiet. |
+| **2. Open a healthy feeder breaker** | Command injection | `cb_open` with ~200 A on the feeder and the tie open. | **CRITICAL · STATE-002** — three buses dead, customers-off and CML climb. |
+| **3. Slow AVC-target drift** | Stealth trajectory | Attacker raises the voltage target 0.1 kV at a time; the tap changer walks the busbar out of limits. | **MEDIUM · ROC-002** (time-to-limit) → **HIGH/CRITICAL** once 11.66 kV is crossed. |
+| **4. Breaker pumping** | Rapid switching | Open/close/open/close/tie-close inside four seconds. | **SEQ-002 / SEQ-003**, then **STATE-003** parallel. |
+| **5. Telemetry & command replay** | Sensor spoofing | Healthy frame replayed while SW-102 is opened behind it; captured command replayed verbatim. | **TEL-002**, **CMD-001** CRITICAL, every advisory **Confidence LOW**. |
+| **6. Planned switching program** | Context awareness | Same tie close, sectionaliser open, breaker open — under a declared switching program with a permit-to-work. | **Nothing above LOW · CTX-001**; energising the permitted section would still be **HIGH · STATE-004**. |
+| **7. Fault, locate, clear, restore** | False-positive check | Protection trips, crew clears, `protection_reset`, `cb_close`. | **Quiet · CTX-002** — the expected restoration step. |
+| **8. Planned outage and restoration** | False-positive check | Transfer through the tie, open the feeder, restore — under a program naming its equipment (`switching_program_on SP-0420:CB-101,SW-102,TS-201`). | **Nothing above LOW**. |
+| **9. Normal operations** | False-positive check | AVC trims, a routine manual tap change, a PV curtailment. | **Quiet**. |
+
 ---
 
 ## 🏗️ Repository Structure
@@ -180,7 +200,7 @@ Sentinel/
 │   └── test_integration.py      # End-to-end MQTT latency tests
 └── docs/
     ├── PRD-v1-water-tank.md     # Reference implementation PRD
-    ├── PRD-v2-distribution-grid.md # Phase 2 Grid formal specification
+    ├── PRD-v2-distribution-grid.md # Distribution feeder PRD (second console)
     └── img/                     # UI screenshots
 ```
 

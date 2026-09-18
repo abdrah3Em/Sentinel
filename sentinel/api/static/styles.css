@@ -190,6 +190,11 @@ svg { display: block; }
 .nav a svg { width: 15px; height: 15px; flex: none; }
 .nav a:hover { color: var(--text); }
 .nav a.active { color: var(--text); background: var(--bg-raised); }
+.nav a.here { color: var(--text); }
+.nav a.here .count { color: var(--green); border-color: var(--green); }
+.nav-consoles { display: flex; flex-direction: column; gap: 2px; }
+.nav-consoles a { text-transform: none; letter-spacing: -0.01em; }
+.nav-consoles a .dot { margin-left: auto; }
 .nav .count {
   margin-left: auto; font-family: var(--font-geist-mono); font-size: var(--text-caption); letter-spacing: var(--tracking-caption);
   min-width: 20px; height: 18px; padding: 0 5px; display: inline-flex; align-items: center; justify-content: center;
@@ -489,7 +494,7 @@ body.ready .scale i { transition: width 0.4s var(--ease), background-color var(-
 .form-row .grow { margin-left: auto; }
 
 /* ------------------------------------------------------------------ rules */
-.policy { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--spacing-24); }
+.policy { display: grid; grid-template-columns: repeat(4, 1fr); gap: var(--spacing-24); }
 .policy-item { display: flex; flex-direction: column; gap: 10px; }
 .policy-item p { color: var(--text-2); font-size: var(--text-body-sm); line-height: var(--leading-body); }
 .threshold-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: var(--gap); }
@@ -540,3 +545,61 @@ body.ready .scale i { transition: width 0.4s var(--ease), background-color var(-
   .contrib { grid-template-columns: 40px 1fr; }
   .contrib .d { grid-column: 1 / -1; }
 }
+
+/* ------------------------------------------------------------------ process-descriptor layouts */
+.tiles { grid-template-columns: repeat(var(--cols, 4), 1fr); }
+.equipment { grid-template-columns: repeat(var(--cols, 4), 1fr); }
+.form-row .input, .form-row .select { width: auto; }
+.form-row .input[type="number"] { width: 96px; }
+.form-row .input[type="text"] { width: 120px; }
+
+/* ------------------------------------------------------------------ mimic: single-line diagram (feeder) */
+.mimic .xfmr { fill: var(--panel); stroke: var(--text-2); stroke-width: 1.5; }
+.mimic .bus { stroke: var(--text); stroke-width: 4; stroke-linecap: round; }
+.mimic .sec { fill: none; stroke: var(--stroke); stroke-width: 5; stroke-linecap: round; transition: stroke 0.2s var(--ease); }
+.mimic .sec.dead { stroke: var(--hairline); }
+.mimic .sw rect { fill: var(--panel); stroke: var(--stroke); stroke-width: 1.5; transition: fill 0.2s var(--ease), stroke 0.2s var(--ease); }
+.mimic .sw .blade { fill: none; stroke: var(--text-2); stroke-width: 1.5; stroke-linecap: round; opacity: 0; transition: opacity 0.2s var(--ease); }
+.mimic .sw.open .blade { opacity: 1; }
+.mimic .sw.closed rect { fill: var(--green); stroke: var(--green); }
+.mimic .sw.tripped rect { fill: var(--panel); stroke: var(--orange); stroke-width: 2; }
+.mimic .sw.tripped .blade { stroke: var(--orange); opacity: 1; }
+.mimic .node circle { fill: var(--text); stroke: var(--text); stroke-width: 1.5; transition: fill 0.2s var(--ease), stroke 0.2s var(--ease); }
+.mimic .node .cross { fill: none; stroke: var(--panel); stroke-width: 1.6; stroke-linecap: round; }
+.mimic .node .load { fill: none; stroke: var(--text-2); stroke-width: 1.5; }
+.mimic .node .larrow { fill: var(--text-2); }
+.mimic .node.dead circle { fill: var(--panel); stroke: var(--fill-mid); }
+.mimic .node.dead .cross { stroke: var(--fill-mid); }
+.mimic .node.dead .load { stroke: var(--fill-mid); }
+.mimic .node.dead .larrow { fill: var(--fill-mid); }
+.mimic .node.dead .gv, .mimic .node.dead .stat { fill: var(--muted); }
+.mimic .node.out .gv { fill: var(--orange); }
+.mimic .node.crit.dead circle { stroke: var(--orange); }
+.mimic .bolt { fill: none; stroke: var(--orange); stroke-width: 2.2; stroke-linejoin: round; stroke-linecap: round; opacity: 0; }
+.mimic .bolt.show { animation: throb 1s var(--ease) infinite; }
+.mimic .flash { fill: var(--orange); opacity: 0; pointer-events: none; }
+.mimic .flash.show { animation: flash 0.9s var(--ease); }
+@keyframes flash { 0% { opacity: 0.9; } 100% { opacity: 0; } }
+.mimic .pv { fill: none; stroke: var(--green); stroke-width: 1.5; stroke-linecap: round; transition: stroke 0.2s var(--ease); }
+.mimic .pv.off { stroke: var(--fill-mid); }
+.mimic .src circle { fill: var(--panel); stroke: var(--text-2); stroke-width: 1.5; }
+.mimic .stat { fill: var(--muted); font: 400 9.5px var(--font-geist-mono); letter-spacing: -0.2px; text-anchor: middle; text-transform: uppercase; }
+.mimic .stat.left { text-anchor: start; }
+.mimic .stat.bad { fill: var(--orange); }
+
+/* ------------------------------------------------------------------ brevity */
+.posture-sub { font-family: var(--font-geist-mono); font-size: var(--text-caption); letter-spacing: var(--tracking-caption); text-transform: uppercase; color: var(--muted); }
+.adv.brief { gap: 14px; }
+.adv.brief h2 { font-size: 22px; letter-spacing: -0.5px; }
+.kv.row { flex-direction: row; flex-wrap: wrap; gap: 8px 24px; }
+.contribs .more { font-family: var(--font-geist-mono); font-size: var(--text-caption); letter-spacing: var(--tracking-caption); text-transform: uppercase; color: var(--muted); padding: 2px 0; }
+.contribs .more:hover { color: var(--text); }
+.confidence:not(.LOW):not(.REDUCED) { padding: 0; border: 0; }
+.scenario p { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.adv-empty { padding: var(--spacing-24) 0; }
+
+/* fault indicators, reversed flow, tap trace */
+.mimic .fi { fill: var(--panel); stroke: var(--fill-mid); stroke-width: 1; transition: fill 0.2s var(--ease), stroke 0.2s var(--ease); }
+.mimic .fi.set { fill: var(--orange); stroke: var(--orange); }
+.mimic .flowline.rev { animation-direction: reverse; }
+.chart-host .series.aux { opacity: 0.55; }

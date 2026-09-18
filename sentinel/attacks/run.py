@@ -13,7 +13,7 @@ import time
 
 from .. import config
 from ..bus import Bus
-from .scenarios import SCENARIOS, ScenarioRunner, catalogue
+from .scenarios import ScenarioRunner, catalogue
 
 
 def main() -> int:
@@ -34,7 +34,7 @@ def main() -> int:
     bus.subscribe(config.TOPIC_TELEMETRY, lambda topic, payload: runner.note_telemetry(payload))
     time.sleep(1.0)   # let a telemetry frame arrive before a replay scenario
 
-    ids = list(SCENARIOS) if args.scenario == "all" else [args.scenario]
+    ids = [s["id"] for s in catalogue()] if args.scenario == "all" else [args.scenario]
     for scenario_id in ids:
         result = runner.start(scenario_id)
         if not result.get("ok"):

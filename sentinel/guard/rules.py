@@ -72,21 +72,21 @@ def rule_discharge_closure(ctx: RuleContext) -> list[Finding]:
         return []
     findings = [
         Finding("SEQ-001", "state", W["PUMP_RUNNING"],
-                f"Pump is running (runtime {ctx.t.pump_runtime_s:.0f}s)", "Pump P-101"),
+                f"Pump is running · {ctx.t.pump_runtime_s:.0f} s", "Pump P-101"),
         Finding("SEQ-001", "state", W["CLOSING_DISCHARGE"],
-                "Command closes the only discharge path while the pump is energised",
+                "Closes the only discharge path with the pump energised",
                 "Outlet valve V-102"),
     ]
     if ctx.flow_active:
         findings.append(Finding("SEQ-001", "state", W["FLOW_ACTIVE"],
-                                f"Measured flow is {ctx.t.flow:.0f} L/min through the outlet",
+                                f"Flow {ctx.t.flow:.0f} m³/h through the outlet",
                                 "Flow transmitter FT-101"))
     if not ctx.maintenance:
         findings.append(Finding("SEQ-001", "context", W["NOT_MAINTENANCE"],
-                                f"Plant is in {ctx.t.mode} mode, not maintenance", "Controller"))
+                                f"{ctx.t.mode} mode, not maintenance", "Controller"))
     if ctx.pump_stop_pending():
         findings.append(Finding("SEQ-001", "context", W["PUMP_STOPPING"],
-                                "A pump stop was commanded seconds earlier — line is being isolated in order",
+                                "Pump stop commanded seconds earlier — isolating in order",
                                 "Pump P-101"))
     return findings
 
@@ -99,12 +99,12 @@ def rule_deadhead_start(ctx: RuleContext) -> list[Finding]:
         return []
     findings = [
         Finding("STATE-002", "state", W["DEADHEAD_START"],
-                "Pump start requested while the outlet valve is closed (no discharge path)",
+                "Outlet valve closed — no discharge path",
                 "Pump P-101 / Outlet valve V-102"),
     ]
     if not ctx.maintenance:
         findings.append(Finding("STATE-002", "context", W["NOT_MAINTENANCE"],
-                                f"Plant is in {ctx.t.mode} mode, not maintenance", "Controller"))
+                                f"{ctx.t.mode} mode, not maintenance", "Controller"))
     return findings
 
 
@@ -116,8 +116,8 @@ def rule_dry_run(ctx: RuleContext) -> list[Finding]:
         return []
     weight = W["DRY_RUN"] if ctx.t.tank_level < config.PUMP_MIN_SUCTION_LEVEL else W["SUCTION_STARVED"]
     return [Finding("STATE-003", "state", weight,
-                    f"Tank level is {ctx.t.tank_level:.0f} % — below the {config.LEVEL_MIN_PCT:.0f} % "
-                    "minimum suction level for pump start", "Tank T-101 / Pump P-101")]
+                    f"Level {ctx.t.tank_level:.0f} %, below the {config.LEVEL_MIN_PCT:.0f} % suction minimum",
+                    "Tank T-101 / Pump P-101")]
 
 
 def rule_suction_isolation(ctx: RuleContext) -> list[Finding]:
@@ -131,8 +131,8 @@ def rule_suction_isolation(ctx: RuleContext) -> list[Finding]:
         return []
     minutes = max(0.1, (headroom / 100.0 * config.TANK_CAPACITY_L) / max(1.0, ctx.t.flow))
     return [Finding("STATE-004", "state", W["SUCTION_STARVED"],
-                    f"Inlet isolation while the pump draws {ctx.t.flow:.0f} L/min — tank reaches the "
-                    f"low limit in about {minutes:.1f} min", "Inlet valve V-101 / Tank T-101")]
+                    f"Inlet isolated at {ctx.t.flow:.0f} m³/h draw — low limit in about {minutes:.1f} min",
+                    "Inlet valve V-101 / Tank T-101")]
 
 
 # ---------------------------------------------------------------------------
@@ -147,16 +147,13 @@ def rule_setpoint_change(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     if abs(delta) > config.SETPOINT_NORMAL_DELTA:
         findings.append(Finding("ROC-001", "rate", W["SETPOINT_LARGE"],
-                                f"Setpoint step of {delta:+.0f} % against a normal operator "
-                                f"adjustment of ±{config.SETPOINT_NORMAL_DELTA:.0f} %", "Controller"))
+                                f"Step {delta:+.0f} % vs normal ±{config.SETPOINT_NORMAL_DELTA:.0f} % trim", "Controller"))
     if abs(delta) > config.SETPOINT_LARGE_DELTA:
         findings.append(Finding("ROC-001", "rate", W["SETPOINT_EXTREME"],
-                                f"Step is more than {config.SETPOINT_LARGE_DELTA:.0f} % in a single "
-                                "command — inconsistent with gradual process control", "Controller"))
+                                f"More than {config.SETPOINT_LARGE_DELTA:.0f} % in one command", "Controller"))
     if not (config.SETPOINT_MIN <= requested <= config.SETPOINT_MAX):
         findings.append(Finding("ENV-001", "envelope", W["SETPOINT_OUT_OF_RANGE"],
-                                f"Requested setpoint {requested:.0f} % is outside the safe operating "
-                                f"band {config.SETPOINT_MIN:.0f}–{config.SETPOINT_MAX:.0f} %",
+                                f"{requested:.0f} % is outside the {config.SETPOINT_MIN:.0f}–{config.SETPOINT_MAX:.0f} % band",
                                 "Tank T-101"))
     return findings
 
@@ -180,14 +177,13 @@ def rule_setpoint_drift(ctx: RuleContext) -> list[Finding]:
         return []
     elapsed_min = max(0.05, (ctx.now_ms - steps[0].ts) / 60000.0)
     findings = [Finding("ROC-002", "rate", W["SETPOINT_DRIFT"],
-                        f"Setpoint has drifted {net:+.0f} % across {len(steps)} small steps in "
-                        f"{elapsed_min:.1f} min ({baseline:.0f} -> {requested:.0f} %) — each step alone "
-                        f"is inside the normal ±{config.SETPOINT_NORMAL_DELTA:.0f} % band", "Controller")]
+                        f"Drifted {net:+.0f} % over {len(steps)} small steps in {elapsed_min:.1f} min "
+                        f"({baseline:.0f} → {requested:.0f} %)", "Controller")]
     edge = config.SETPOINT_MAX if net > 0 else config.SETPOINT_MIN
     band = f"{config.SETPOINT_MIN:.0f}–{config.SETPOINT_MAX:.0f} % band"
     if not (config.SETPOINT_MIN <= requested <= config.SETPOINT_MAX):
         findings.append(Finding("ROC-002", "rate", W["DRIFT_TRAJECTORY"],
-                                f"The drift has now carried the setpoint outside the {band}", "Tank T-101"))
+                                f"Now outside the {band}", "Tank T-101"))
         return findings
     rate = net / elapsed_min
     remaining = edge - requested
@@ -196,7 +192,7 @@ def rule_setpoint_drift(ctx: RuleContext) -> list[Finding]:
         if minutes <= config.DRIFT_PROJECTION_MIN:
             when = "under a minute" if minutes < 1 else f"about {minutes:.0f} min"
             findings.append(Finding("ROC-002", "rate", W["DRIFT_TRAJECTORY"],
-                                    f"At this rate the setpoint leaves the {band} in {when}", "Tank T-101"))
+                                    f"Trajectory leaves the {band} in {when}", "Tank T-101"))
     return findings
 
 
@@ -211,12 +207,12 @@ def rule_envelope_pressure(ctx: RuleContext) -> list[Finding]:
         return []
     if ctx.t.pressure > config.PRESSURE_MAX_BAR:
         return [Finding("ENV-002", "envelope", W["ENVELOPE_BREACH"],
-                        f"Discharge pressure is already {ctx.t.pressure:.1f} bar, above the "
-                        f"{config.PRESSURE_MAX_BAR:.1f} bar limit", "Pressure transmitter PT-101")]
+                        f"Pressure {ctx.t.pressure:.1f} bar, above the {config.PRESSURE_MAX_BAR:.1f} bar limit",
+                        "Pressure transmitter PT-101")]
     if ctx.t.pressure > config.PRESSURE_WARN_BAR:
         return [Finding("ENV-002", "envelope", W["ENVELOPE_APPROACH"],
-                        f"Discharge pressure is {ctx.t.pressure:.1f} bar, approaching the "
-                        f"{config.PRESSURE_MAX_BAR:.1f} bar limit", "Pressure transmitter PT-101")]
+                        f"Pressure {ctx.t.pressure:.1f} bar, near the {config.PRESSURE_MAX_BAR:.1f} bar limit",
+                        "Pressure transmitter PT-101")]
     return []
 
 
@@ -232,20 +228,17 @@ def rule_rapid_sequence(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     if len(recent) >= config.RAPID_COMMAND_COUNT:
         findings.append(Finding("SEQ-002", "sequence", W["RAPID_SEQUENCE"],
-                                f"{len(recent)} actuator commands in {config.RAPID_WINDOW_S:.0f} s — "
-                                "faster than normal operator sequencing", "Controller"))
+                                f"{len(recent)} actuator commands in {config.RAPID_WINDOW_S:.0f} s", "Controller"))
     if len(burst) >= config.BURST_COMMAND_COUNT:
         findings.append(Finding("SEQ-002", "sequence", W["BURST_SEQUENCE"],
-                                f"{len(burst)} actuator commands in the last "
-                                f"{config.BURST_WINDOW_S:.0f} s", "Controller"))
+                                f"{len(burst)} in the last {config.BURST_WINDOW_S:.0f} s", "Controller"))
     # Flapping: the same actuator driven both ways inside the window.
     pairs = [("pump_start", "pump_stop"), ("outlet_open", "outlet_close"), ("inlet_open", "inlet_close")]
     actions = [c.action for c in recent]
     for a, b in pairs:
         if a in actions and b in actions:
             findings.append(Finding("SEQ-003", "sequence", W["FLAPPING"],
-                                    f"{a} and {b} both issued within {config.RAPID_WINDOW_S:.0f} s — "
-                                    "actuator is being cycled", "Actuator"))
+                                    f"{a} and {b} within {config.RAPID_WINDOW_S:.0f} s", "Actuator"))
     return findings
 
 
@@ -268,8 +261,7 @@ def rule_unsafe_pattern(ctx: RuleContext) -> list[Finding]:
     for pattern, description in UNSAFE_PATTERNS:
         if _contains_subsequence(actions, pattern):
             findings.append(Finding("SEQ-004", "sequence", W["UNSAFE_PATTERN"],
-                                    f"{description} within {config.BURST_WINDOW_S:.0f} s "
-                                    f"({' -> '.join(pattern)})", "Process"))
+                                    f"{description} ({' → '.join(pattern)})", "Process"))
     return findings
 
 
@@ -288,7 +280,7 @@ def rule_maintenance_context(ctx: RuleContext) -> list[Finding]:
     if ctx.command.action not in MAINTENANCE_EXPECTED:
         return []
     return [Finding("CTX-001", "context", W["MAINTENANCE_CONTEXT"],
-                    "Plant is in MAINTENANCE mode — isolation and restoration commands are expected here",
+                    "MAINTENANCE mode — isolation steps expected",
                     "Controller")]
 
 
@@ -303,10 +295,10 @@ def rule_source(ctx: RuleContext) -> list[Finding]:
         if ctx.maintenance:
             return []
         return [Finding("SRC-001", "context", W["UNTRUSTED_SOURCE"],
-                        f"Command originated from '{source}' while the plant is not in maintenance",
+                        f"From '{source}' outside maintenance",
                         "Command source")]
     return [Finding("SRC-001", "context", W["UNTRUSTED_SOURCE"],
-                    f"Command originated from unrecognised source '{source}'", "Command source")]
+                    f"Unrecognised source '{source}'", "Command source")]
 
 
 def rule_command_replay(ctx: RuleContext) -> list[Finding]:
@@ -317,17 +309,15 @@ def rule_command_replay(ctx: RuleContext) -> list[Finding]:
     age = (ctx.now_ms - ctx.command.ts) / 1000.0
     if age > config.CMD_STALE_S:
         findings.append(Finding("CMD-001", "integrity", W["COMMAND_STALE"],
-                                f"Command timestamp is {age:.0f} s old — replayed or delayed traffic",
+                                f"Timestamp {age:.0f} s old — replayed or delayed",
                                 "Command path"))
     elif age < -config.CMD_STALE_S:
         findings.append(Finding("CMD-001", "integrity", W["COMMAND_STALE"],
-                                f"Command timestamp is {-age:.0f} s in the future — clock manipulation "
-                                "or forged traffic", "Command path"))
+                                f"Timestamp {-age:.0f} s in the future", "Command path"))
     # The current command is already in the history, so a genuine duplicate shows twice.
     if ctx.state.history.times_seen(ctx.command.id) >= 2:
         findings.append(Finding("CMD-001", "integrity", W["COMMAND_DUPLICATE"],
-                                f"Command id {ctx.command.id} has already been processed — the same "
-                                "message is being replayed", "Command path"))
+                                f"Id {ctx.command.id} has already been processed — replay", "Command path"))
     return findings
 
 
@@ -340,22 +330,21 @@ def rule_telemetry_integrity(ctx: RuleContext) -> list[Finding]:
     findings: list[Finding] = []
     if integrity.last_seq is None:
         return [Finding("TEL-001", "telemetry", W["TELEMETRY_STALE"],
-                        "No telemetry has been received — process state is unknown", "Telemetry path")]
+                        "No telemetry received", "Telemetry path")]
     age = integrity.age_s(ctx.now)
     gap = integrity.gap_s(ctx.now)
     if age > config.TELEMETRY_STALE_S or gap > config.TELEMETRY_STALE_S:
         worst = max(age, gap)
         findings.append(Finding("TEL-001", "telemetry", W["TELEMETRY_STALE"],
-                                f"Newest telemetry frame is {worst:.0f} s old — the displayed state may "
-                                "no longer represent the live plant", "Telemetry path"))
+                                f"Newest frame {worst:.0f} s old", "Telemetry path"))
     if integrity.repeat_count >= config.REPLAY_REPEAT_COUNT:
         findings.append(Finding("TEL-002", "telemetry", W["TELEMETRY_REPLAY"],
-                                f"Telemetry sequence has not advanced for {integrity.repeat_count} frames "
-                                f"(stuck at seq {integrity.last_seq}) — replay suspected", "Telemetry path"))
+                                f"Sequence stuck at {integrity.last_seq} for {integrity.repeat_count} frames — replay suspected",
+                                "Telemetry path"))
     if integrity.regressions:
         findings.append(Finding("TEL-003", "telemetry", W["TELEMETRY_REGRESSION"],
-                                f"Telemetry sequence went backwards {integrity.regressions} time(s) — "
-                                "frames are being injected or reordered", "Telemetry path"))
+                                f"Sequence went backwards {integrity.regressions} time(s) — injected frames",
+                                "Telemetry path"))
     return findings
 
 
@@ -371,10 +360,23 @@ def rule_physics_residual(ctx: RuleContext) -> list[Finding]:
         return []          # valves and flow meters need a moment to follow a command
     expected = ctx.state.expected_flow()
     return [Finding("PHY-001", "physics", W["PHYSICS_MISMATCH"],
-                    f"Pump {'ON' if t.pump else 'OFF'} with outlet "
-                    f"{'OPEN' if t.outlet_valve else 'CLOSED'} should give about {expected:.0f} L/min, "
-                    f"but {t.flow:.0f} L/min is reported (residual {residual:.0f} L/min)",
+                    f"Pump {'ON' if t.pump else 'OFF'}, outlet {'OPEN' if t.outlet_valve else 'CLOSED'} → "
+                    f"expect ~{expected:.0f} m³/h, reading {t.flow:.0f}",
                     "Flow transmitter FT-101")]
+
+
+def rule_learned_baseline(ctx: RuleContext) -> list[Finding]:
+    """BASE-001 — ordinary in itself, but unlike anything this source or action normally does."""
+    if not ctx.command:
+        return []
+    findings: list[Finding] = []
+    cadence = ctx.state.baseline.cadence_deviation(ctx.command)
+    if cadence:
+        findings.append(Finding("BASE-001", "baseline", W["BASELINE_DEVIATION"], cadence, "Command source"))
+    value = ctx.state.baseline.value_deviation(ctx.command)
+    if value:
+        findings.append(Finding("BASE-001", "baseline", W["BASELINE_DEVIATION"], value, "Controller"))
+    return findings
 
 
 COMMAND_RULES: list[CommandRule] = [
@@ -392,6 +394,7 @@ COMMAND_RULES: list[CommandRule] = [
     rule_telemetry_integrity,
     rule_physics_residual,
     rule_maintenance_context,
+    rule_learned_baseline,
 ]
 
 PROCESS_RULES: list[CommandRule] = [
@@ -401,16 +404,18 @@ PROCESS_RULES: list[CommandRule] = [
 
 
 def evaluate_command(state: ProcessState, command: Command, now: float | None = None) -> list[Finding]:
+    from .. import process   # lazy: the domain modules import this file
     ctx = RuleContext(state=state, command=command, now=now or time.time())
     findings: list[Finding] = []
-    for rule in COMMAND_RULES:
+    for rule in process.domain().COMMAND_RULES:
         findings.extend(rule(ctx))
     return findings
 
 
 def evaluate_process(state: ProcessState, now: float | None = None) -> list[Finding]:
+    from .. import process
     ctx = RuleContext(state=state, command=None, now=now or time.time())
     findings: list[Finding] = []
-    for rule in PROCESS_RULES:
+    for rule in process.domain().PROCESS_RULES:
         findings.extend(rule(ctx))
     return findings

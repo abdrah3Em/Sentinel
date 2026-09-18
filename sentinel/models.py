@@ -44,6 +44,58 @@ class Telemetry:
 
 
 @dataclass
+class GridTelemetry:
+    """One feeder frame published by the distribution simulator (PRD rev 2 section 13)."""
+
+    ts: int = field(default_factory=now_ms)
+    seq: int = 0
+    frequency_hz: float = 50.0
+    v_source_kv: float = 33.0
+    tap: int = 0
+    avc_target_kv: float = 11.0
+    avc_mode: str = "AUTO"
+    avc_override_s: float = 0.0
+    v_bus_kv: float = 0.0
+    v_b1_kv: float = 0.0
+    v_b2_kv: float = 0.0
+    v_b3_kv: float = 0.0
+    i_feeder_a: float = 0.0
+    p_feeder_kw: float = 0.0
+    load_b1_kw: float = 0.0
+    load_b2_kw: float = 0.0
+    load_b3_kw: float = 0.0
+    pv_kw: float = 0.0
+    pv_curtail_pct: float = 0.0
+    cb_closed: bool = True
+    sw_closed: bool = True
+    tie_closed: bool = False
+    protection_tripped: bool = False
+    fault_present: bool = False
+    fault_section: Optional[str] = None
+    fault_indicators: list[bool] = field(default_factory=lambda: [False, False, False])
+    supplied: dict[str, bool] = field(default_factory=lambda: {"b1": True, "b2": True, "b3": True})
+    customers_off: int = 0
+    cml: float = 0.0
+    close_onto_fault_count: int = 0
+    switchgear_stress: float = 0.0
+    parallel_s: float = 0.0
+    circulating_a: float = 0.0
+    fault_current_ka: float = 0.0
+    trip_age_s: Optional[float] = None
+    switching_program: Optional[str] = None
+    sp_covers: list[str] = field(default_factory=list)
+    permit_to_work: Optional[str] = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "GridTelemetry":
+        known = {k: v for k, v in data.items() if k in cls.__dataclass_fields__}
+        return cls(**known)
+
+
+@dataclass
 class Command:
     """A control command observed on the wire (PRD section 13)."""
 

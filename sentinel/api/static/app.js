@@ -1,19 +1,19 @@
-/* Sentinel dashboard.  One SSE stream feeds a small in-memory store; views render from it. */
+/* Sentinel dashboard.  One SSE stream feeds a small in-memory store; views render from it.
+   The overview is built from the process descriptor the API sends in the snapshot, so the
+   same shell serves the oil pumping station and the distribution feeder. */
 'use strict';
 
 const $ = (id) => document.getElementById(id);
-const LIMITS = { levelMin: 20, levelMax: 90, pressureMax: 5.0, pressureWarn: 4.0, flowMax: 100 };
-const TANK = { top: 41, height: 198 };
 const RANK = { NORMAL: -1, LOW: 0, MEDIUM: 1, HIGH: 2, CRITICAL: 3 };
 const CONF_CLASS = { HIGH: 'ok', REDUCED: 'warn', LOW: 'crit' };
-// Data-voice colours only: orange for danger states, neutrals for the rest.
 const SEV_COLOR = { LOW: 'var(--muted)', MEDIUM: 'var(--text)', HIGH: 'var(--orange)', CRITICAL: 'var(--orange)' };
-const SERIES = { level: 'var(--text)', flow: 'var(--green)', pressure: 'var(--orange)', setpoint: 'var(--muted)' };
+const CV = { text: 'var(--text)', green: 'var(--green)', orange: 'var(--orange)', muted: 'var(--muted)' };
 
 const S = {
   state: {}, status: {}, alerts: [], events: [], assessments: [], trend: [], scenarios: [], rules: [], thresholds: {},
   selected: null, pinned: false, view: 'overview', sev: 'all', tlFilter: 'all', tlSearch: '', running: {},
 };
+let D = null;                       // process descriptor
 
 /* ================================================================ utilities */
 const pad = (n, w = 2) => String(n).padStart(w, '0');
@@ -23,10 +23,28 @@ const fmtTime = (ms, withMs = false) => {
 };
 const fmtFull = (ms) => new Date(ms).toLocaleString(undefined, { hour12: false });
 const num = (v, d = 1) => (v === undefined || v === null || Number.isNaN(Number(v)) ? '—' : Number(v).toFixed(d));
+const signed = (v) => (v === undefined || v === null ? '—' : (v > 0 ? '+' : '') + Math.round(v));
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const title = (s) => (s ? s[0] + s.slice(1).toLowerCase() : '');
 const badge = (level, text) => `<span class="badge ${level}">${esc(text ?? title(level))}</span>`;
+// "{key:1}" -> fixed decimals, "{key:+d}" -> signed integer, "{key}" -> raw
+const fmtTpl = (tpl, obj) => tpl.replace(/\{(\w+)(?::([^}]+))?\}/g, (_, k, spec) => {
+  const v = obj[k];
+  if (v === undefined || v === null) return '—';
+  if (spec === '+d') return signed(v);
+  if (spec !== undefined && /^\d+$/.test(spec)) return num(v, Number(spec));
+  return String(v);
+});
 
+// Operator token: taken from ?token=… once, kept per browser, sent on every write.
+let TOKEN = '';
+try { const q = new URLSearchParams(location.search).get('token'); if (q) localStorage.setItem('sentinel-token', q); TOKEN = localStorage.getItem('sentinel-token') || ''; } catch (e) {}
+async function post(url, body) {
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(TOKEN ? { 'X-Sentinel-Token': TOKEN } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
+  const data = await res.json().catch(() => ({ ok: false, error: `HTTP ${res.status}` }));
+  if (res.status === 401) data.error = 'Operator token required — open the console with ?token=…';
+  return data;
+}
 function toast(msg) {
   const el = document.createElement('div'); el.textContent = msg; $('toast').appendChild(el);
   setTimeout(() => el.remove(), 2600);
@@ -44,13 +62,15 @@ function connect() {
         Object.assign(S, { state: data.state || {}, status: data.status || {}, alerts: data.alerts || [],
           events: data.events || [], assessments: data.assessments || [], trend: data.trend || [],
           scenarios: data.scenarios || [], rules: data.rules || [], thresholds: data.thresholds || {} });
+        if (data.descriptor) applyDescriptor(data.descriptor);
+        $('tag-lock').hidden = !data.token_required;
         if (!S.selected && S.alerts.length) S.selected = S.alerts[0];
         renderScenarios(); renderRules(); renderAll();
         requestAnimationFrame(() => document.body.classList.add('ready'));
         break;
       case 'telemetry':
         S.state = data;
-        S.trend.push({ ts: data.ts, tank_level: data.tank_level, pressure: data.pressure, flow: data.flow, setpoint: data.setpoint });
+        S.trend.push({ ts: data.ts, ...Object.fromEntries((D ? D.trend.series : []).map((s) => [s.key, data[s.key]])) });
         if (S.trend.length > 300) S.trend.shift();
         renderProcess(); if (S.view === 'overview') { renderChart(); renderSparklines(); }
         break;
@@ -76,6 +96,42 @@ function setStream(ok) {
   $('txt-live').textContent = ok ? 'Live' : 'Disconnected';
   $('txt-stream').textContent = ok ? 'Stream connected' : 'Stream down · retrying';
   $('tag-live').className = 'tag' + (ok ? '' : ' bad');
+}
+
+/* ================================================================ descriptor → DOM */
+function applyDescriptor(d) {
+  D = d;
+  document.title = `Sentinel — ${d.brand}`;
+  $('brand-sub').textContent = d.brand;
+  $('nav-consoles').innerHTML = (d.consoles || []).map((c) => {
+    const href = c.active ? '#overview' : `${location.protocol}//${location.hostname}:${c.port}/`;
+    return `<a href="${href}" class="${c.active ? 'here' : ''}" title="port ${c.port}"><svg><use href="#i-${c.id === 'grid' ? 'breaker' : 'pump'}"/></svg>${esc(c.label)}<span class="dot ${c.active ? 'ok' : ''}"></span></a>`;
+  }).join('');
+  $('foot-process').textContent = d.short;
+  $('process-sub').textContent = d.process_sub;
+  const tiles = $('tiles'); tiles.style.setProperty('--cols', d.kpis.length);
+  tiles.innerHTML = d.kpis.map((k) => `<div class="tile" id="kpi-${k.key}" style="--spark:${CV[k.spark] || CV.green}">
+    <div class="tile-top"><span class="eyebrow">${esc(k.label)}</span><span class="badge plain" id="kpi-${k.key}-badge">—</span></div>
+    <div class="tile-val"><b id="v-${k.key}">—</b><span>${esc(k.unit)}</span></div>
+    <svg class="spark" id="sp-${k.key}" viewBox="0 0 100 40" preserveAspectRatio="none"></svg>
+    <div class="tile-foot" id="kpi-${k.key}-foot">${esc(fmtTpl(k.foot, {}))}</div></div>`).join('');
+  const eq = $('equipment'); eq.style.setProperty('--cols', d.equipment.length);
+  eq.innerHTML = d.equipment.map((e) => `<div><div class="eq-icon" id="eq-${e.key}-i"><svg><use href="#i-${esc(e.icon)}"/></svg></div>
+    <div><div class="eq-name">${esc(e.label)}</div><div class="eq-state" id="eq-${e.key}">—</div></div></div>`).join('');
+  $('legend').innerHTML = d.trend.series.map((s) => `<span class="${s.dash ? 'dash' : ''}" style="--c:${CV[s.color]}">${esc(s.label)}</span>`).join('');
+  document.querySelectorAll('.mimic').forEach((m) => m.toggleAttribute('hidden', m.id !== 'mimic-' + d.id));
+  const c = d.console;
+  $('ops-buttons').innerHTML = c.buttons.map((b) => `<button class="btn" data-cmd="${esc(b.action)}">${esc(b.label)}</button>`).join('');
+  const control = (i, idAttr) => i.type === 'select'
+    ? `<select class="select" id="${idAttr}">${(i.options || []).map((o) => `<option value="${esc(o)}" ${o === i.default ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+    : `<input class="input" id="${idAttr}" type="${i.type || 'text'}" value="${esc(i.default ?? '')}" ${i.min !== undefined ? `min="${i.min}"` : ''} ${i.max !== undefined ? `max="${i.max}"` : ''} ${i.step !== undefined ? `step="${i.step}"` : ''}>`;
+  $('ops-inputs').innerHTML = c.inputs.map((i) => `<label><span class="eyebrow">${esc(i.label)}</span>${control(i, 'in-' + i.action)}</label>
+      <button class="btn" data-cmd="${esc(i.action)}" data-input="in-${esc(i.action)}">Apply</button>`).join('')
+    + `<label class="grow"><span class="eyebrow">Source</span><select class="select" id="source">${c.sources.map((s) => `<option value="${esc(s.value)}">${esc(s.label)}</option>`).join('')}</select></label>`;
+  const sim = $('ops-sim'); sim.hidden = !c.sim.length;
+  sim.innerHTML = c.sim.length ? `<span class="eyebrow"><i class="dot bad"></i>Simulator only</span>` + c.sim.map((h) => (h.type
+    ? `<label><span class="eyebrow">${esc(h.label)}</span>${control(h, 'sim-' + h.hook)}</label><button class="btn ghost" data-sim="${esc(h.hook)}" data-input="sim-${esc(h.hook)}">Apply</button>`
+    : `<button class="btn ghost" data-sim="${esc(h.hook)}">${esc(h.label)}</button>`)).join('') : '';
 }
 
 /* ================================================================ router */
@@ -111,9 +167,7 @@ function renderStatus() {
   const b = $('p-badge'); b.className = 'badge lg ' + level;
   b.textContent = level === 'NORMAL' ? 'Normal' : `${title(level)} risk`;
   $('p-headline').textContent = st.headline || 'No unsafe command detected';
-  $('p-sub').textContent = st.alert_id
-    ? 'Most severe advisory in the last 60 seconds. No automatic action has been taken on the plant.'
-    : 'Sentinel advises. The engineer decides. No command is ever blocked and the guard has no write path to the plant.';
+  $('p-sub').textContent = st.alert_id ? 'Worst advisory in the last 60 s · no automatic action taken' : 'Advisory only · the engineer decides';
   $('p-score').textContent = score;
   $('p-scale').style.setProperty('--x', score + '%');
   $('p-ctx').textContent = st.context || '—';
@@ -136,118 +190,210 @@ function renderStatus() {
   n.className = 'count' + (S.alerts.some((a) => RANK[a.level] >= 2 && Date.now() - a.ts < 60000) ? ' alert' : '');
 }
 
+/* ================================================================ render: process (descriptor + domain renderer) */
 function renderProcess() {
-  const t = S.state; if (!t || t.tank_level === undefined) return;
-  const { tank_level: level, pressure, flow } = t;
-  const deadhead = t.pump && !t.outlet_valve;
-
-  $('v-level').textContent = num(level, 1);
-  $('v-pressure').textContent = num(pressure, 2);
-  $('v-flow').textContent = num(flow, 0);
-  $('v-setpoint').textContent = num(t.setpoint, 0);
-  $('kpi-level-foot').textContent = `Setpoint ${num(t.setpoint, 0)} % · band ${LIMITS.levelMin}–${LIMITS.levelMax} %`;
-  const expected = expectedFlow(t);
-  $('kpi-flow-foot').textContent = `Expected ${num(expected, 0)} L/min from physics`;
-
-  setBadge('kpi-level-badge', level > LIMITS.levelMax ? ['crit', 'High'] : level < LIMITS.levelMin ? ['crit', 'Low'] : ['ok', 'Nominal']);
-  setBadge('kpi-pressure-badge', pressure > LIMITS.pressureMax ? ['crit', 'Over limit'] : pressure > LIMITS.pressureWarn ? ['warn', 'Elevated'] : ['ok', 'Nominal']);
-  setBadge('kpi-flow-badge', t.pump && t.outlet_valve && flow < 5 ? ['crit', 'No flow'] : deadhead ? ['crit', 'Dead-headed'] : ['ok', t.pump ? 'Nominal' : 'Idle']);
-  setBadge('kpi-sp-badge', t.mode === 'MAINTENANCE' ? ['warn', 'Maintenance'] : ['plain', title(t.mode || '—')]);
-  $('kpi-level').classList.toggle('alarm', level > LIMITS.levelMax || level < LIMITS.levelMin);
-  $('kpi-pressure').classList.toggle('alarm', pressure > LIMITS.pressureMax);
-  $('kpi-flow').classList.toggle('alarm', deadhead || (t.pump && t.outlet_valve && flow < 5));
-
-  setEquip('pump', t.pump ? 'Running' : 'Stopped', deadhead || t.dry_run_s > 1 ? 'bad' : t.pump ? 'on' : 'off');
-  setEquip('outlet', t.outlet_valve ? 'Open' : 'Closed', t.outlet_valve ? 'on' : deadhead ? 'bad' : 'off');
-  setEquip('inlet', t.inlet_valve ? 'Open' : 'Closed', t.inlet_valve ? 'on' : 'off');
-  setEquip('mode', title(t.mode || ''), t.mode === 'MAINTENANCE' ? 'warn' : 'on');
-
-  // mimic
-  const y = TANK.top + TANK.height * (1 - level / 100);
-  $('tank-fill').setAttribute('y', y); $('tank-fill').setAttribute('height', Math.max(0, TANK.top + TANK.height - y));
-  $('tank-surface').setAttribute('y', y);
-  $('tank-read').textContent = num(level, 1) + '%';
-  $('tank-read').setAttribute('y', Math.min(TANK.top + TANK.height - 14, Math.max(TANK.top + 28, y + 30)));
-  setLine('line-hi', 'lbl-hi', LIMITS.levelMax, 'HI 90'); setLine('line-lo', 'lbl-lo', LIMITS.levelMin, 'LO 20');
-  setLine('line-sp', 'lbl-sp', t.setpoint, 'SP ' + num(t.setpoint, 0));
-  const flowing = flow > 5, inflow = t.inlet_valve && level < 99.5;
-  $('pipe-inlet').classList.toggle('active', !!inflow);
-  $('pipe-suction').classList.toggle('active', flowing); $('pipe-discharge').classList.toggle('active', flowing);
-  $('arrow-out').classList.toggle('active', flowing);
-  const speed = flowing ? Math.max(0.3, 1.6 - flow / 90) : 1;
-  ['pipe-inlet', 'pipe-suction', 'pipe-discharge'].forEach((id) => ($(id).style.animationDuration = speed + 's'));
-  $('valve-inlet').classList.toggle('closed', !t.inlet_valve);
-  $('valve-outlet').classList.toggle('closed', !t.outlet_valve);
-  $('deadhead-zone').classList.toggle('show', deadhead);
-  $('pump').setAttribute('class', 'pump' + (t.pump ? ' on' : '') + (deadhead || t.dry_run_s > 1 ? ' fault' : ''));
-  $('pt-value').textContent = num(pressure, 1); $('ft-value').textContent = num(flow, 0);
-  $('gauge-pt').setAttribute('class', 'gauge' + (pressure > LIMITS.pressureMax ? ' alarm' : pressure > LIMITS.pressureWarn ? ' warn' : ''));
-  $('gauge-ft').setAttribute('class', 'gauge' + (t.pump && t.outlet_valve && flow < 5 ? ' alarm' : ''));
-
-  const note = $('mimic-note');
-  if (deadhead) { note.className = 'mimic-note bad';
-    note.textContent = `Dead-headed for ${num(t.deadhead_s, 0)} s — pump running into a closed outlet. Flow ${num(flow, 0)} L/min, pressure ${num(pressure, 2)} bar and rising toward shut-off head.`; }
-  else if (t.dry_run_s > 1) { note.className = 'mimic-note bad'; note.textContent = `Dry running — suction level ${num(level, 0)} % is below the pump minimum. Cavitation risk.`; }
-  else if (t.pump && flowing) { note.className = 'mimic-note'; note.textContent = `Nominal transfer: tank ${num(level, 0)} % → pump P-101 → discharge at ${num(flow, 0)} L/min, ${num(pressure, 2)} bar.`; }
-  else { note.className = 'mimic-note'; note.textContent = t.pump ? 'Pump running, no flow established yet.' : 'Pump stopped — no transfer in progress.'; }
+  const t = S.state; if (!D || !t || t.seq === undefined) return;
+  const dom = DOMAINS[D.id]; if (!dom) return;
+  const x = { ...t, ...dom.derive(t) };
+  for (const k of D.kpis) {
+    $('v-' + k.key).textContent = k.signed ? signed(t[k.key]) : num(t[k.key], k.dp);
+    $('kpi-' + k.key + '-foot').textContent = fmtTpl(k.foot, x);
+    const [cls, text, alarm] = dom.kpi(k.key, t, x);
+    setBadge('kpi-' + k.key + '-badge', [cls, text]);
+    $('kpi-' + k.key).classList.toggle('alarm', !!alarm);
+  }
+  for (const e of D.equipment) { const [text, cls] = dom.equip(e.key, t, x); setEquip(e.key, text, cls); }
+  dom.mimic(t, x);
+  const [ncls, ntext] = dom.note(t, x);
+  const note = $('mimic-note'); note.className = 'mimic-note ' + ncls; note.textContent = ntext;
 }
+function setBadge(id, [cls, text]) { const el = $(id); el.className = 'badge ' + cls; el.textContent = text; }
+function setEquip(key, text, cls) { $('eq-' + key).textContent = text; $('eq-' + key + '-i').className = 'eq-icon ' + cls; }
+
+/* ---------------------------------------------------------------- domain: oil pumping station */
+const TANK = { top: 41, height: 198, levelMin: 20, levelMax: 90, pressureMax: 5.0, pressureWarn: 4.0 };
 function expectedFlow(t) {
   if (!t.pump || !t.outlet_valve) return 0;
   const suction = t.tank_level >= 8 ? 1 : Math.pow(Math.max(0, t.tank_level / 8), 1.5);
   return 95 * (0.82 + 0.18 * t.tank_level / 100) * suction;
 }
-function setBadge(id, [cls, text]) { const el = $(id); el.className = 'badge ' + cls; el.textContent = text; }
-function setEquip(key, text, cls) { $('eq-' + key).textContent = text; $('eq-' + key + '-i').className = 'eq-icon ' + cls; }
 function setLine(lineId, labelId, value, text) {
   if (value === undefined || value === null) return;
   const y = TANK.top + TANK.height * (1 - value / 100);
   $(lineId).setAttribute('y1', y); $(lineId).setAttribute('y2', y);
   $(labelId).setAttribute('y', y + 3); $(labelId).textContent = text;
 }
+const tankDomain = {
+  derive: (t) => ({ expected_flow: expectedFlow(t) }),
+  kpi(key, t) {
+    const deadhead = t.pump && !t.outlet_valve, level = t.tank_level, p = t.pressure;
+    switch (key) {
+      case 'tank_level': return level > TANK.levelMax ? ['crit', 'High', true] : level < TANK.levelMin ? ['crit', 'Low', true] : ['ok', 'Nominal', false];
+      case 'pressure': return p > TANK.pressureMax ? ['crit', 'Over limit', true] : p > TANK.pressureWarn ? ['warn', 'Elevated', false] : ['ok', 'Nominal', false];
+      case 'flow': return t.pump && t.outlet_valve && t.flow < 5 ? ['crit', 'No flow', true] : deadhead ? ['crit', 'Dead-headed', true] : ['ok', t.pump ? 'Nominal' : 'Idle', false];
+      case 'setpoint': return t.mode === 'MAINTENANCE' ? ['warn', 'Maintenance', false] : ['plain', title(t.mode || '—'), false];
+    }
+    return ['plain', '—', false];
+  },
+  equip(key, t) {
+    const deadhead = t.pump && !t.outlet_valve;
+    switch (key) {
+      case 'pump': return [t.pump ? 'Running' : 'Stopped', deadhead || t.dry_run_s > 1 ? 'bad' : t.pump ? 'on' : 'off'];
+      case 'outlet': return [t.outlet_valve ? 'Open' : 'Closed', t.outlet_valve ? 'on' : deadhead ? 'bad' : 'off'];
+      case 'inlet': return [t.inlet_valve ? 'Open' : 'Closed', t.inlet_valve ? 'on' : 'off'];
+      case 'mode': return [title(t.mode || ''), t.mode === 'MAINTENANCE' ? 'warn' : 'on'];
+    }
+    return ['—', 'off'];
+  },
+  mimic(t) {
+    const { tank_level: level, pressure, flow } = t, deadhead = t.pump && !t.outlet_valve;
+    const y = TANK.top + TANK.height * (1 - level / 100);
+    $('tank-fill').setAttribute('y', y); $('tank-fill').setAttribute('height', Math.max(0, TANK.top + TANK.height - y));
+    $('tank-surface').setAttribute('y', y);
+    $('tank-read').textContent = num(level, 1) + '%';
+    $('tank-read').setAttribute('y', Math.min(TANK.top + TANK.height - 14, Math.max(TANK.top + 28, y + 30)));
+    setLine('line-hi', 'lbl-hi', TANK.levelMax, 'HI 90'); setLine('line-lo', 'lbl-lo', TANK.levelMin, 'LO 20');
+    setLine('line-sp', 'lbl-sp', t.setpoint, 'SP ' + num(t.setpoint, 0));
+    const flowing = flow > 5, inflow = t.inlet_valve && level < 99.5;
+    $('pipe-inlet').classList.toggle('active', !!inflow);
+    $('pipe-suction').classList.toggle('active', flowing); $('pipe-discharge').classList.toggle('active', flowing);
+    $('arrow-out').classList.toggle('active', flowing);
+    const speed = flowing ? Math.max(0.3, 1.6 - flow / 90) : 1;
+    ['pipe-inlet', 'pipe-suction', 'pipe-discharge'].forEach((id) => ($(id).style.animationDuration = speed + 's'));
+    $('valve-inlet').classList.toggle('closed', !t.inlet_valve);
+    $('valve-outlet').classList.toggle('closed', !t.outlet_valve);
+    $('deadhead-zone').classList.toggle('show', deadhead);
+    $('pump').setAttribute('class', 'pump' + (t.pump ? ' on' : '') + (deadhead || t.dry_run_s > 1 ? ' fault' : ''));
+    $('pt-value').textContent = num(pressure, 1); $('ft-value').textContent = num(flow, 0);
+    $('gauge-pt').setAttribute('class', 'gauge' + (pressure > TANK.pressureMax ? ' alarm' : pressure > TANK.pressureWarn ? ' warn' : ''));
+    $('gauge-ft').setAttribute('class', 'gauge' + (t.pump && t.outlet_valve && flow < 5 ? ' alarm' : ''));
+  },
+  note(t) {
+    const deadhead = t.pump && !t.outlet_valve, flowing = t.flow > 5;
+    if (deadhead) return ['bad', `Dead-headed ${num(t.deadhead_s, 0)} s · ${num(t.flow, 0)} m³/h · ${num(t.pressure, 2)} bar rising`];
+    if (t.dry_run_s > 1) return ['bad', `Dry running · level ${num(t.tank_level, 0)} % below pump minimum`];
+    if (t.pump && flowing) return ['', `Nominal · ${num(t.flow, 0)} m³/h · ${num(t.pressure, 2)} bar`];
+    return ['', t.pump ? 'Pump running · no flow yet' : 'Pump stopped'];
+  },
+};
+
+/* ---------------------------------------------------------------- domain: distribution feeder */
+const GRID = { vmin: 10.34, vmax: 11.66, vwarnLo: 10.5, vwarnHi: 11.5, rating: 400, warn: 360 };
+let lastCloseOntoFault = null;
+function topo(cb, sw, tie) {
+  const t1 = { S1: cb, S2: cb && sw, S3: cb && sw }, f2 = { S1: tie && sw, S2: tie, S3: tie };
+  return { S1: t1.S1 || f2.S1, S2: t1.S2 || f2.S2, S3: t1.S3 || f2.S3, parallel: cb && sw && tie };
+}
+const vBand = (v) => (v > GRID.vmax || v < GRID.vmin ? 'out' : v > GRID.vwarnHi || v < GRID.vwarnLo ? 'near' : 'ok');
+const gridDomain = {
+  derive: (t) => ({}),
+  kpi(key, t) {
+    switch (key) {
+      case 'v_bus_kv': { const b = vBand(t.v_bus_kv); return b === 'out' ? ['crit', 'Out of band', true] : b === 'near' ? ['warn', 'Near limit', false] : ['ok', 'In band', false]; }
+      case 'v_b3_kv': { if (!t.supplied?.b3) return ['crit', 'Dead', true]; const b = vBand(t.v_b3_kv); return b === 'out' ? ['crit', 'Out of band', true] : b === 'near' ? ['warn', 'Near limit', false] : ['ok', 'Supplied', false]; }
+      case 'i_feeder_a': return t.fault_current_ka ? ['crit', 'Fault current', true] : t.i_feeder_a > GRID.rating ? ['crit', 'Overload', true]
+        : t.i_feeder_a > GRID.warn ? ['warn', 'Near rating', false] : !t.cb_closed ? ['plain', 'Breaker open', false] : ['ok', 'Nominal', false];
+      case 'tap': return t.avc_mode === 'MANUAL' ? ['warn', 'Manual', false] : t.avc_override_s > 0 ? ['warn', 'Override', false] : ['plain', 'AVC auto', false];
+    }
+    return ['plain', '—', false];
+  },
+  equip(key, t) {
+    const par = t.cb_closed && t.sw_closed && t.tie_closed;
+    switch (key) {
+      case 'cb': return t.protection_tripped ? [t.cb_closed ? 'Closed · latch set' : 'Tripped', 'bad'] : [t.cb_closed ? 'Closed' : 'Open', t.cb_closed ? 'on' : 'off'];
+      case 'sw': return [t.sw_closed ? 'Closed' : 'Open', t.sw_closed ? 'on' : 'off'];
+      case 'tie': return t.tie_closed ? [par ? 'Closed · parallel' : 'Closed · transfer', par ? 'warn' : 'on'] : ['Open · normal', 'off'];
+      case 'pv': return t.supplied?.b2 ? [`${num(t.pv_kw / 1000, 2)} MW${t.pv_curtail_pct ? ` · ${num(t.pv_curtail_pct, 0)} % curtailed` : ''}`, 'on'] : ['Tripped · bus dead', 'bad'];
+      case 'sp': return t.switching_program ? [t.switching_program + (t.sp_covers?.length && t.sp_covers.length < 6 ? ` · ${t.sp_covers.length} items` : '') + (t.permit_to_work ? ` · PTW ${t.permit_to_work}` : ''), 'on']
+        : t.permit_to_work ? [`PTW ${t.permit_to_work} · no program`, 'warn'] : ['None', 'off'];
+    }
+    return ['—', 'off'];
+  },
+  mimic(t) {
+    const tp = topo(t.cb_closed, t.sw_closed, t.tie_closed);
+    const live = (id, on) => { const el = $(id); el.classList.toggle('dead', !on); };
+    live('g-l0', t.cb_closed); live('g-s1', tp.S1); live('g-l1', tp.S1); live('g-s2', tp.S2); live('g-s3', tp.S3); live('g-l3', tp.S3);
+    $('g-f1').classList.toggle('active', tp.S1 && !!t.cb_closed); $('g-f2').classList.toggle('active', tp.S2); $('g-f3').classList.toggle('active', tp.S3);
+    const sw = (id, closed, tripped) => ($(id).setAttribute('class', 'sw ' + (tripped ? 'tripped' : closed ? 'closed' : 'open')));
+    sw('g-cb', t.cb_closed, t.protection_tripped && !t.cb_closed); sw('g-sw', t.sw_closed, false); sw('g-tie', t.tie_closed, false);
+    for (const s of ['S1', 'S2', 'S3']) { $('g-bolt-' + s).classList.toggle('show', t.fault_section === s); $('g-fi-' + s).classList.toggle('set', t.fault_section === s); }
+    const fromF2 = { S1: !t.cb_closed && t.tie_closed && t.sw_closed, S2: !(t.cb_closed && t.sw_closed) && t.tie_closed, S3: !(t.cb_closed && t.sw_closed) && t.tie_closed };
+    [['g-f1', 'S1'], ['g-f2', 'S2'], ['g-f3', 'S3']].forEach(([id, s]) => $(id).classList.toggle('rev', !!fromF2[s]));
+    const node = (id, on, v, vid, lid, kw) => {
+      const el = $(id); el.classList.toggle('dead', !on); el.classList.toggle('out', on && vBand(v) === 'out');
+      $(vid).textContent = on ? num(v, 2) + ' kV' : 'DEAD'; $(lid).textContent = on ? `${num(kw / 1000, 2)} MW` : '0 MW';
+    };
+    node('g-b1', t.supplied?.b1, t.v_b1_kv, 'g-vb1', 'g-lb1', t.load_b1_kw);
+    node('g-b2', t.supplied?.b2, t.v_b2_kv, 'g-vb2', 'g-lb2', t.load_b2_kw);
+    node('g-b3', t.supplied?.b3, t.v_b3_kv, 'g-vb3', 'g-lb3', t.load_b3_kw);
+    $('g-vbus').textContent = num(t.v_bus_kv, 2) + ' kV';
+    $('g-tap').textContent = `TAP ${signed(t.tap)}`;
+    $('g-pv').classList.toggle('off', !t.supplied?.b2 || t.pv_kw <= 0);
+    $('g-pvkw').textContent = t.supplied?.b2 ? `PV ${num(t.pv_kw / 1000, 2)} MW${t.pv_curtail_pct ? ` · ${num(t.pv_curtail_pct, 0)} % curt.` : ''}` : 'PV tripped';
+    const stats = $('g-stats');
+    stats.textContent = `Customers off ${t.customers_off ?? 0} · CML ${num(t.cml, 1)} · close-onto-fault ${t.close_onto_fault_count ?? 0} · stress ${num(t.switchgear_stress, 0)} %${tp.parallel ? ` · parallel ${num(t.parallel_s, 0)} s · ${num(t.circulating_a, 0)} A circulating` : ''}`;
+    stats.setAttribute('class', 'stat left' + (t.customers_off > 0 || t.fault_current_ka ? ' bad' : ''));
+    $('g-ctx').textContent = `AVC ${t.avc_mode} ${num(t.avc_target_kv, 2)} kV · program ${t.switching_program ? t.switching_program + ' (' + (t.sp_covers || []).join(', ') + ')' : '—'} · permit ${t.permit_to_work || '—'} · protection ${t.protection_tripped ? 'TRIPPED' : 'reset'}`;
+    if (lastCloseOntoFault !== null && t.close_onto_fault_count > lastCloseOntoFault) {
+      const f = $('g-flash'); f.classList.remove('show'); void f.getBoundingClientRect(); f.classList.add('show');
+    }
+    lastCloseOntoFault = t.close_onto_fault_count ?? 0;
+  },
+  note(t) {
+    const tp = topo(t.cb_closed, t.sw_closed, t.tie_closed);
+    if (t.fault_current_ka) return ['bad', `Closed onto fault ${t.fault_section} · ${num(t.fault_current_ka, 1)} kA · re-tripping`];
+    if (t.fault_present && t.protection_tripped) return ['bad', `Tripped · fault on ${t.fault_section} not cleared · ${t.customers_off} customers off`];
+    if (t.customers_off > 0) return ['bad', `${['b1', 'b2', 'b3'].filter((b) => !t.supplied?.[b]).map((b) => b.toUpperCase()).join(', ')} dead · ${t.customers_off} customers off · CML ${num(t.cml, 1)}`];
+    if (vBand(t.v_bus_kv) === 'out') return ['bad', `Busbar ${num(t.v_bus_kv, 2)} kV outside ${GRID.vmin}–${GRID.vmax} kV · tap ${signed(t.tap)}`];
+    if (tp.parallel) return ['', `Paralleled with F2 · ${num(t.parallel_s, 0)} s · ${num(t.circulating_a, 0)} A circulating`];
+    if (t.fault_present) return ['', `Fault indicator set on ${t.fault_section} · latch ${t.protection_tripped ? 'set' : 'reset'}`];
+    return ['', `Nominal · ${num(t.i_feeder_a, 0)} A · ${num(t.v_bus_kv, 2)} kV · tap ${signed(t.tap)} · PV ${num(t.pv_kw / 1000, 1)} MW`];
+  },
+};
+const DOMAINS = { grid: gridDomain, oil: tankDomain };
 
 /* ================================================================ render: charts */
 function renderSparklines() {
+  if (!D) return;
   const data = S.trend.slice(-80);
-  const spark = (id, key, max) => {
-    const svg = $(id); if (data.length < 2) { svg.innerHTML = ''; return; }
-    const pts = data.map((d, i) => [(i / (data.length - 1)) * 100, 39 - (Math.min(max, Math.max(0, d[key] ?? 0)) / max) * 34]);
+  for (const k of D.kpis) {
+    const svg = $('sp-' + k.key); if (!svg) continue;
+    if (data.length < 2) { svg.innerHTML = ''; continue; }
+    const span = Math.max(1e-9, k.max - k.min);
+    const pts = data.map((d, i) => [(i / (data.length - 1)) * 100, 39 - (Math.min(k.max, Math.max(k.min, d[k.key] ?? k.min)) - k.min) / span * 34]);
     const line = pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(2)} ${y.toFixed(2)}`).join(' ');
     svg.innerHTML = `<path class="area" d="${line} L100 40 L0 40 Z"/><path d="${line}"/>`;
-  };
-  spark('sp-level', 'tank_level', 100); spark('sp-pressure', 'pressure', 7); spark('sp-flow', 'flow', 100); spark('sp-setpoint', 'setpoint', 100);
+  }
 }
 
 let chartGeom = null;
 function renderChart() {
+  if (!D) return;
   const host = $('chart-host'), svg = $('chart');
   const data = S.trend.slice(-240); if (data.length < 2) { svg.innerHTML = ''; return; }
-  const W = host.clientWidth || 480, H = 260, L = 34, R = 34, T = 12, B = 26;
+  const W = host.clientWidth || 480, H = 260, L = 38, R = 38, T = 12, B = 26;
   svg.setAttribute('viewBox', `0 0 ${W} ${H}`);
   const t0 = data[0].ts, t1 = data[data.length - 1].ts, span = Math.max(1, t1 - t0);
   const x = (ts) => L + ((ts - t0) / span) * (W - L - R);
-  const yL = (v) => T + (1 - Math.max(0, Math.min(100, v)) / 100) * (H - T - B);
-  const yR = (v) => T + (1 - Math.max(0, Math.min(7, v)) / 7) * (H - T - B);
-  chartGeom = { data, x, W, L, R };
+  const ax = D.trend;
+  const yFor = (a) => (v) => T + (1 - (Math.max(a.min, Math.min(a.max, v)) - a.min) / (a.max - a.min)) * (H - T - B);
+  const yL = yFor(ax.left), yR = yFor(ax.right), yA = ax.aux ? yFor(ax.aux) : yL;
+  const yOf = (axis) => (axis === 'right' ? yR : axis === 'aux' ? yA : yL);
+  chartGeom = { data, x, W };
 
   let grid = '', axis = '';
-  for (const v of [0, 25, 50, 75, 100]) { grid += `<line x1="${L}" x2="${W - R}" y1="${yL(v)}" y2="${yL(v)}"/>`; axis += `<text x="${L - 8}" y="${yL(v) + 3}" text-anchor="end">${v}</text>`; }
-  for (const v of [0, 2, 4, 6]) axis += `<text x="${W - R + 8}" y="${yR(v) + 3}">${v}</text>`;
+  for (const v of ax.left.ticks) { grid += `<line x1="${L}" x2="${W - R}" y1="${yL(v)}" y2="${yL(v)}"/>`; axis += `<text x="${L - 8}" y="${yL(v) + 3}" text-anchor="end">${v}</text>`; }
+  for (const v of ax.right.ticks) axis += `<text x="${W - R + 8}" y="${yR(v) + 3}">${v}</text>`;
   const ticks = W < 520 ? 2 : 4;
   for (let i = 0; i <= ticks; i++) { const ts = t0 + (span * i) / ticks; axis += `<text x="${x(ts)}" y="${H - 8}" text-anchor="${i === 0 ? 'start' : i === ticks ? 'end' : 'middle'}">${fmtTime(ts)}</text>`; }
-  const path = (key, y) => data.map((d, i) => `${i ? 'L' : 'M'}${x(d.ts).toFixed(1)} ${y(d[key] ?? 0).toFixed(1)}`).join(' ');
-  svg.innerHTML = `
-    <g class="grid">${grid}</g><g class="axis">${axis}</g>
-    <line class="limit" x1="${L}" x2="${W - R}" y1="${yL(LIMITS.levelMax)}" y2="${yL(LIMITS.levelMax)}"/>
-    <line class="limit" x1="${L}" x2="${W - R}" y1="${yL(LIMITS.levelMin)}" y2="${yL(LIMITS.levelMin)}"/>
-    <line class="limit pressure" x1="${L}" x2="${W - R}" y1="${yR(LIMITS.pressureMax)}" y2="${yR(LIMITS.pressureMax)}"/>
-    <path class="series" stroke="${SERIES.setpoint}" stroke-dasharray="3 4" d="${path('setpoint', yL)}"/>
-    <path class="series" stroke="${SERIES.flow}" d="${path('flow', yL)}"/>
-    <path class="series" stroke="${SERIES.pressure}" d="${path('pressure', yR)}"/>
-    <path class="series" stroke="${SERIES.level}" d="${path('tank_level', yL)}"/>
+  const path = (key, y, step) => data.map((d, i) => (i && step ? `H${x(d.ts).toFixed(1)} V${y(d[key] ?? 0).toFixed(1)}` : `${i ? 'L' : 'M'}${x(d.ts).toFixed(1)} ${y(d[key] ?? 0).toFixed(1)}`)).join(' ');
+  const limits = ax.limits.map((l) => { const y = (l.axis === 'right' ? yR : yL)(l.value); return `<line class="limit ${l.danger ? 'pressure' : ''}" x1="${L}" x2="${W - R}" y1="${y}" y2="${y}"/>`; }).join('');
+  const series = ax.series.map((s) => `<path class="series ${s.axis === 'aux' ? 'aux' : ''}" stroke="${CV[s.color]}" ${s.dash ? 'stroke-dasharray="3 4"' : ''} d="${path(s.key, yOf(s.axis), s.step)}"/>`).join('');
+  svg.innerHTML = `<g class="grid">${grid}</g><g class="axis">${axis}</g>${limits}${series}
     <line class="crosshair" id="crosshair" y1="${T}" y2="${H - B}" x1="-10" x2="-10"/>`;
 }
 $('chart-host').addEventListener('mousemove', (ev) => {
-  if (!chartGeom) return;
+  if (!chartGeom || !D) return;
   const { data, x, W } = chartGeom, host = $('chart-host'), rect = host.getBoundingClientRect();
   const px = ((ev.clientX - rect.left) / host.clientWidth) * W;
   let best = 0, bd = Infinity;
@@ -255,11 +401,8 @@ $('chart-host').addEventListener('mousemove', (ev) => {
   const d = data[best], cx = x(d.ts);
   const ch = $('crosshair'); ch.setAttribute('x1', cx); ch.setAttribute('x2', cx);
   const tip = $('chart-tip'); tip.hidden = false;
-  tip.innerHTML = `<div class="t">${fmtTime(d.ts, true)}</div>
-    <div><span><i style="background:${SERIES.level}"></i>Level</span><b>${num(d.tank_level, 1)} %</b></div>
-    <div><span><i style="background:${SERIES.flow}"></i>Flow</span><b>${num(d.flow, 0)} L/min</b></div>
-    <div><span><i style="background:${SERIES.pressure}"></i>Pressure</span><b>${num(d.pressure, 2)} bar</b></div>
-    <div><span><i style="background:${SERIES.setpoint}"></i>Setpoint</span><b>${num(d.setpoint, 0)} %</b></div>`;
+  tip.innerHTML = `<div class="t">${fmtTime(d.ts, true)}</div>` + D.trend.series.map((s) =>
+    `<div><span><i style="background:${CV[s.color]}"></i>${esc(s.label)}</span><b>${s.axis === 'aux' ? signed(d[s.key]) : num(d[s.key], s.axis === 'right' ? 0 : 2)}</b></div>`).join('');
   const left = (cx / W) * host.clientWidth;
   tip.style.left = Math.max(0, Math.min(host.clientWidth - 180, left + 12)) + 'px'; tip.style.top = '8px';
 });
@@ -267,13 +410,46 @@ $('chart-host').addEventListener('mouseleave', () => { $('chart-tip').hidden = t
 window.addEventListener('resize', () => { if (S.view === 'overview') renderChart(); });
 
 /* ================================================================ render: advisory detail */
+function stateRows(s) {
+  if (!D) return [];
+  return D.state_rows.map(([label, key, f]) => {
+    const v = s[key];
+    let out = '—';
+    if (f.kind === 'num') out = num(v, f.dp) + (f.unit || '');
+    else if (f.kind === 'bool') out = v ? f.on : f.off;
+    else if (f.kind === 'tap') out = `${signed(s.tap)} / ${num(s.avc_target_kv, 2)} kV`;
+    else out = v === null || v === undefined || v === '' ? (f.empty || '—') : (f.title ? title(String(v)) : String(v));
+    return [label, out];
+  });
+}
+// First sentence (or two) of a paragraph, whole sentences only.
+function brief(text, max = 1) {
+  const parts = String(text || '').split(/(?<=\.)\s+/);
+  return parts.slice(0, max).join(' ');
+}
+function advisoryBrief(a) {
+  if (!a) return `<div class="adv-empty"><b>No unsafe command detected</b></div>`;
+  const c = a.command, findings = (a.findings || []).filter((f) => f.weight > 0).sort((x, y) => y.weight - x.weight);
+  const shown = findings.slice(0, 3), more = findings.length - shown.length, max = Math.max(1, ...findings.map((f) => f.weight));
+  return `<div class="adv brief">
+    <div class="adv-head">${badge(a.level)}<span class="badge plain">${esc(a.rule)}</span><span class="t">${fmtTime(a.ts, true)}</span></div>
+    <h2>${esc(a.summary)}</h2>
+    <div class="kv row">
+      <div><span class="eyebrow">Command</span><span class="v mono">${c ? esc(c.action + (c.value != null ? ` = ${c.value}` : '')) : 'process condition'}</span></div>
+      <div><span class="eyebrow">Source</span><span class="v mono">${c ? esc(c.source) : '—'}</span></div>
+      <div><span class="eyebrow">Equipment</span><span class="v">${esc(a.equipment || '—')}</span></div>
+    </div>
+    <div class="contribs">${shown.map((f) => `<div class="contrib" style="--w:${(f.weight / max) * 100}%"><span class="w">+${f.weight}</span><span class="r">${esc(f.rule)}</span><span class="d">${esc(f.detail)}</span></div>`).join('')}
+      ${more > 0 ? `<a class="more" href="#advisories">+${more} more</a>` : ''}</div>
+    <div class="callout"><span class="eyebrow"><i class="dot green"></i>Do this</span><p>${esc(brief(a.recommendation))}</p></div>
+    <div class="adv-foot"><span>${badge(CONF_CLASS[a.confidence] || 'ok', 'Confidence ' + title(a.confidence || 'HIGH'))}</span><span>Risk <b>${a.score}</b> / 100</span></div>
+  </div>`;
+}
 function advisoryHtml(a) {
-  if (!a) return `<div class="adv-empty"><b>No unsafe command detected</b><p>Advisories appear here with the command, the state it was judged against, the reasoning and what to verify.</p></div>`;
+  if (!a) return `<div class="adv-empty"><b>No unsafe command detected</b></div>`;
   const c = a.command, s = a.state || {}, integ = s.integrity || {};
   const findings = a.findings || [], max = Math.max(1, ...findings.map((f) => Math.abs(f.weight)));
-  const rows = [['Tank level', num(s.tank_level, 1) + ' %'], ['Pressure', num(s.pressure, 2) + ' bar'], ['Flow', num(s.flow, 0) + ' L/min'],
-    ['Pump', s.pump ? 'Running' : 'Stopped'], ['Outlet valve', s.outlet_valve ? 'Open' : 'Closed'], ['Inlet valve', s.inlet_valve ? 'Open' : 'Closed'],
-    ['Mode', title(s.mode || '—')], ['Telemetry age', integ.age_s == null ? '—' : num(integ.age_s, 1) + ' s'], ['Telemetry seq', integ.seq ?? '—']];
+  const rows = stateRows(s);
   return `<div class="adv">
     <div class="adv-head">${badge(a.level)}<span class="badge plain">${esc(a.rule)}</span>${a.context ? `<span class="badge plain">${esc(title(a.context))}</span>` : ''}<span class="t" title="${esc(fmtFull(a.ts))}">${fmtTime(a.ts, true)}</span></div>
     <h2>${esc(a.summary)}</h2>
@@ -285,21 +461,21 @@ function advisoryHtml(a) {
         ${a.suppressed_score ? `<div><span class="eyebrow">Without context</span><span class="v">Would have scored ${a.suppressed_score}/100</span></div>` : ''}
       </div>
       <div class="adv-section"><span class="eyebrow">Process state at evaluation</span>
-        <table class="state-table">${rows.map(([k, v]) => `<tr><td>${k}</td><td>${esc(v)}</td></tr>`).join('')}</table></div>
+        <table class="state-table">${rows.map(([k, v]) => `<tr><td>${esc(k)}</td><td>${esc(v)}</td></tr>`).join('')}</table></div>
     </div>
     <div class="adv-section"><span class="eyebrow">Why this matters</span><p class="why">${esc(a.why)}</p></div>
     <div class="adv-section"><span class="eyebrow">Risk contributions</span>
       <div class="contribs">${findings.map((f) => `<div class="contrib ${f.weight < 0 ? 'neg' : ''}" style="--w:${(Math.abs(f.weight) / max) * 100}%">
         <span class="w">${f.weight > 0 ? '+' : ''}${f.weight}</span><span class="r">${esc(f.rule)}</span><span class="d">${esc(f.detail)}</span></div>`).join('')}</div></div>
-    <div class="callout"><span class="eyebrow"><i class="dot green"></i>Recommended action — engineer decides</span><p>${esc(a.recommendation)}</p></div>
-    <div class="confidence ${a.confidence || 'HIGH'}"><span class="eyebrow">${badge(CONF_CLASS[a.confidence] || 'ok', 'Confidence ' + title(a.confidence || 'HIGH'))}<span class="muted">what Sentinel could verify</span></span>
-      <p>${esc(a.uncertainty || 'Sentinel advises only; it has not acted on the plant.')}</p></div>
-    <div class="adv-foot"><span>No automatic action taken</span><span>Risk <b>${a.score}</b> / 100</span></div>
+    <div class="callout"><span class="eyebrow"><i class="dot green"></i>Do this</span><p>${esc(a.recommendation)}</p></div>
+    <div class="confidence ${a.confidence || 'HIGH'}"><span class="eyebrow">${badge(CONF_CLASS[a.confidence] || 'ok', 'Confidence ' + title(a.confidence || 'HIGH'))}</span>
+      ${a.confidence && a.confidence !== 'HIGH' ? `<p>${esc(a.uncertainty)}</p>` : ''}</div>
+    <div class="adv-foot"><span>Advisory only</span><span>Risk <b>${a.score}</b> / 100</span></div>
   </div>`;
 }
 function renderAdvisory() {
   const a = S.selected;
-  $('adv-overview').innerHTML = advisoryHtml(a);
+  $('adv-overview').innerHTML = advisoryBrief(a);
   $('adv-ov-sub').textContent = a ? `${a.rule} · ${fmtTime(a.ts)}` : '';
   if (S.view === 'advisories') $('adv-detail').innerHTML = advisoryHtml(a);
 }
@@ -315,7 +491,7 @@ function timelineRows() {
     if (e.type === 'SCENARIO') rows.push({ ts: e.ts, kind: 'demo', type: badge('demo', p.phase === 'START' || p.phase === 'END' ? 'Scenario' : 'Narration'), text: d, source: e.source, q: d });
     else if (e.type === 'COMMAND_ACCEPTED') { const as = byCmd.get(p.command_id);
       rows.push({ ts: e.ts, kind: 'cmd', type: badge('accent', 'Command'), text: d, source: e.source, verdict: as ? (as.verdict === 'NORMAL' ? badge('ok', 'Consistent') : badge(as.verdict, `${title(as.verdict)} · ${as.score}`)) : '', q: d }); }
-    else if (e.type === 'PHYSICAL' || e.type === 'PROCESS') rows.push({ ts: e.ts, kind: 'physical', type: badge(p.severity === 'HIGH' ? 'crit' : p.severity === 'MEDIUM' ? 'warn' : 'plain', e.type === 'PHYSICAL' ? 'Physical' : 'Process'), text: d, source: e.source, q: d });
+    else if (e.type === 'PHYSICAL' || e.type === 'PROCESS' || e.type === 'PROTECTION') rows.push({ ts: e.ts, kind: 'physical', type: badge(p.severity === 'HIGH' ? 'crit' : p.severity === 'MEDIUM' ? 'warn' : 'plain', title(e.type)), text: d, source: e.source, q: d });
     else rows.push({ ts: e.ts, kind: 'other', type: badge('plain', title(e.type.replace(/_/g, ' '))), text: d || JSON.stringify(p), source: e.source, q: d });
   }
   return rows.sort((a, b) => b.ts - a.ts);
@@ -358,13 +534,12 @@ function renderScenarios() {
     <div class="sc-head">${badge(s.kind === 'attack' ? 'crit' : 'ok', s.kind === 'attack' ? 'Attack' : 'Legitimate')}</div>
     <h4>${esc(s.title)}</h4>
     <p>${esc(s.narrative)}</p>
-    <div class="expect"><span class="eyebrow">Expected verdict</span><span>${esc(s.expect)}</span></div>
-    <div class="sc-foot"><span class="muted">${s.steps} steps · ~${s.duration_hint} s</span><button class="btn" data-run="${s.id}"><svg><use href="#i-play"/></svg>Run</button></div>
+    <div class="sc-foot"><span class="muted">${esc(s.expect)} · ~${s.duration_hint} s</span><button class="btn" data-run="${s.id}"><svg><use href="#i-play"/></svg>Run</button></div>
     <div class="progress"><i></i></div></div>`).join('');
 }
 async function runScenario(id) {
   const card = document.querySelector(`.scenario[data-id="${id}"]`), bar = card.querySelector('.progress i');
-  const res = await fetch('/api/scenario/' + id, { method: 'POST' }).then((r) => r.json());
+  const res = await post('/api/scenario/' + id);
   if (!res.ok) { toast(res.error || 'Could not start scenario'); return; }
   const ms = (res.duration_hint || 10) * 1000;
   document.querySelectorAll('[data-run]').forEach((b) => (b.disabled = true));
@@ -374,19 +549,24 @@ async function runScenario(id) {
 }
 function renderRules() {
   const th = S.thresholds || {};
-  const pol = th.policy || {};
-  $('policy').innerHTML = [['When Sentinel is unsure', pol.when_unsure], ['What it never does', pol.never_blocks], ['Who decides', pol.human_decides]]
+  const pol = th.policy || {}, env = th.envelope || {};
+  $('policy').innerHTML = [['When Sentinel is unsure', pol.when_unsure], ['What it never does', pol.never_blocks], ['Who decides', pol.human_decides], ['What it cannot see', pol.limits]]
     .filter(([, v]) => v).map(([k, v]) => `<div class="policy-item"><span class="eyebrow">${k}</span><p>${esc(v)}</p></div>`).join('');
   const bands = (th.severity_bands || []).slice().sort((a, b) => a.min - b.min);
+  const envelope = env.voltage_kv
+    ? [['Statutory voltage', `${env.voltage_kv[0].toFixed(2)}–${env.voltage_kv[1].toFixed(2)} kV (warn ${env.voltage_warn_kv[0]}–${env.voltage_warn_kv[1]})`],
+       ['Feeder rating', `${env.current_a[1].toFixed(0)} A (warn ${env.current_warn_a.toFixed(0)}) · tap ${env.tap[0]}…+${env.tap[1]} · standing parallel > ${env.parallel_s} s`]]
+    : env.level_pct
+      ? [['Level band', `${env.level_pct[0]}–${env.level_pct[1]} %`], ['Pressure limit', `${env.pressure_bar[1].toFixed(1)} bar (warn ${env.pressure_warn_bar.toFixed(1)})`]]
+      : [];
   $('thresholds').innerHTML = [
     ['Severity bands', bands.map((b, i) => `${b.min}–${bands[i + 1] ? bands[i + 1].min - 1 : 100} ${title(b.level)}`).join(' · ')],
     ['Advisory threshold', `score ≥ ${th.alert_min_score}`],
-    ['Level band', th.envelope ? `${th.envelope.level_pct[0]}–${th.envelope.level_pct[1]} %` : '—'],
-    ['Pressure limit', th.envelope ? `${th.envelope.pressure_bar[1].toFixed(1)} bar (warn ${th.envelope.pressure_warn_bar.toFixed(1)})` : '—'],
+    ...envelope,
     ['Telemetry freshness', th.telemetry ? `stale after ${th.telemetry.stale_s} s · replay at ${th.telemetry.replay_repeat_count} repeats` : '—'],
     ['Rapid sequencing', th.timing ? `${th.timing.rapid_count} in ${th.timing.rapid_window_s} s · ${th.timing.burst_count} in ${th.timing.burst_window_s} s` : '—'],
     ['Trusted sources', (th.trusted_sources || []).join(', ')],
-    ['Maintenance sources', (th.maintenance_sources || []).join(', ')],
+    [D && D.id === 'grid' ? 'Program sources' : 'Maintenance sources', (th.maintenance_sources || []).join(', ')],
   ].map(([k, v]) => `<div class="threshold"><span class="eyebrow">${k}</span><b>${esc(v)}</b></div>`).join('');
   $('rules-count').textContent = `${S.rules.length} rules across 7 detection layers`;
   $('tbl-rules').querySelector('tbody').innerHTML = S.rules.map((r) => `<tr>
@@ -395,13 +575,25 @@ function renderRules() {
 }
 
 /* ================================================================ actions */
+function inputValue(id) {
+  const el = $(id); if (!el) return undefined;
+  if (el.type === 'number') return Number(el.value);
+  return el.value;
+}
 document.addEventListener('click', async (ev) => {
   const run = ev.target.closest('[data-run]'); if (run) return runScenario(run.dataset.run);
+  const sim = ev.target.closest('[data-sim]');
+  if (sim) {
+    const body = { hook: sim.dataset.sim, value: sim.dataset.input ? inputValue(sim.dataset.input) : true };
+    const res = await post('/api/sim', body);
+    toast(res.ok ? `Simulator: ${body.hook}${body.value !== true ? ' ' + body.value : ''}` : res.error);
+    return;
+  }
   const cmd = ev.target.closest('[data-cmd]');
   if (cmd) {
     const body = { action: cmd.dataset.cmd, source: $('source').value };
-    if (body.action === 'setpoint') body.value = Number($('sp').value);
-    const res = await fetch('/api/command', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }).then((r) => r.json());
+    if (cmd.dataset.input) body.value = inputValue(cmd.dataset.input);
+    const res = await post('/api/command', body);
     toast(res.ok ? `Sent ${body.action}${body.value != null ? ' = ' + body.value : ''} from ${body.source}` : res.error);
     return;
   }
@@ -411,7 +603,7 @@ document.addEventListener('click', async (ev) => {
   if (tf) { S.tlFilter = tf.dataset.f; document.querySelectorAll('#tl-filters .chip').forEach((c) => c.classList.toggle('active', c === tf)); renderTables(); return; }
 });
 $('tl-search').addEventListener('input', (ev) => { S.tlSearch = ev.target.value; renderTables(); });
-$('reset').addEventListener('click', async () => { await fetch('/api/reset', { method: 'POST' }); });
+$('reset').addEventListener('click', async () => { const r = await post('/api/reset'); if (!r.ok) toast(r.error); });
 $('theme').addEventListener('click', () => {
   const light = document.documentElement.dataset.theme !== 'light';
   if (light) document.documentElement.dataset.theme = 'light'; else delete document.documentElement.dataset.theme;
