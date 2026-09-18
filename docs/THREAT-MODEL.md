@@ -21,6 +21,7 @@ command (opening a faulted breaker) can cause the outage the guard was meant to 
 | The physics model and the rule weights in `config.py` | The telemetry path: frames can be delayed, frozen, replayed or injected |
 | The console's operator token (`data/console-token`) | The console's network: every mutating endpoint needs the token; reads are open by design (it is an observer's screen) |
 | The broker's process boundary on the demo host | The broker's clients: a client that can publish on `plant/command` is an attacker for the purposes of this model |
+| The RTU's wire tap (in-process, or the transparent proxy) | The Modbus TCP client: any host that can reach port 5020 can write coils and registers, exactly as the brief's controllers allow; those writes arrive unsigned with source `modbus:<ip>` |
 
 ## What each layer defends against, and what defeats it
 

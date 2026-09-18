@@ -17,6 +17,7 @@ git clone https://github.com/DanonymousCoder/Sentinel.git && cd Sentinel && dock
 Broker, feeder simulator (with its Modbus TCP RTU on 5020), guard and console come up
 with healthchecks. Open **http://localhost:8080**. The operator token is in the
 `dashboard-grid` container log (`docker compose logs dashboard-grid | grep token`).
+`docker compose --profile pipeline up` adds the pump station on 8081.
 
 ### Option B — local Python (the demo laptop)
 
@@ -60,8 +61,10 @@ to choose it yourself. Reads stay open: the console is an observer's screen.
 
 The feeder RTU listens on **5020** (pipeline station: 5021). Coil and register writes
 become plant commands exactly as an attacker's would; input registers mirror telemetry.
-The passive tap decodes function codes 1/2/3/4/5/6/15/16 off the wire and publishes each
-frame to `grid/modbus/frames`, which the console's Timeline shows.
+The RTU's wire tap decodes function codes 1/2/3/4/5/6/15/16 in both directions and
+publishes each frame to `grid/modbus/frames`; the console's Timeline shows them under the
+*Modbus* filter. The same decoder runs as a transparent proxy in front of any RTU:
+`python -m sentinel.plant.modbus --tap 5030 127.0.0.1:5020`.
 
 ```bash
 python -m sentinel.attacks.modbus_inject coil 0 1            # cb_close, straight to the RTU
