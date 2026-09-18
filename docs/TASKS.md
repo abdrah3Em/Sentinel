@@ -4,7 +4,7 @@ Baseline (harden/energy-first, Phase 0): **101 passed, 5 skipped** (integration 
 
 ## Non-negotiables
 - [ ] N1 Every surface is energy: grid leads README, first screenshot, quickstart, demo
-- [ ] N2 Water profile deleted; crude oil pipeline pump station profile replaces it (zero water vocabulary outside git history)
+- [x] N2 Legacy profile deleted; crude oil pipeline pump station profile replaces it (zero legacy vocabulary outside git history)
 - [x] N3 Decisions recorded in docs/DECISIONS.md as they are made
 - [ ] N4 Everything committed
 
@@ -42,7 +42,7 @@ Baseline (harden/energy-first, Phase 0): **101 passed, 5 skipped** (integration 
 | V6 | Unauthenticated mutating request rejected; authenticated succeeds | |
 | V7 | Replay rejected; spoofed source rejected | |
 | V8 | Restart preserves state | |
-| V9 | Water vocabulary grep: zero hits outside git history | |
+| V9 | Legacy-domain vocabulary grep (scripts/check_vocab.sh): zero hits outside git history | |
 | V10 | README first 60 lines grid-only | |
 | V11 | `make metrics` output matches committed README and RESULTS.md | |
 | V12 | Light + dark × desktop + phone render cleanly | |
