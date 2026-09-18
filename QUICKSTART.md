@@ -1,237 +1,190 @@
-# Sentinel — Critical Infrastructure Command Guard
+# Sentinel — Quickstart
 
-> **Valid commands. Unsafe consequences. Detected in context.**
-
-Sentinel is a process-aware OT security layer for the ISCS hackathon challenge
-**E1 — Catching Unsafe Commands in Your Own Control System**. It watches the
-commands and telemetry of a (simulated) water-treatment pump skid and asks, for
-every command, not *"is this authorised?"* but **"does this make sense for the
-physical process right now?"** — then explains its reasoning to a human
-engineer, who keeps the final decision.
-
-The full product requirements document is in [`readme.md`](readme.md). This
-file is the run book.
-
-![Sentinel overview during the flagship attack](docs/img/ui-overview.png)
-
-![Grid simulation during the close-onto-fault attack](docs/img/ui-grid-overview.png)
-
-The dashboard has five views — **Overview**, **Advisories**, **Timeline**, **Scenarios**
-and **Detection rules** — a sidebar console built on the design tokens in `design-sentinel/`,
-dark by default with a light theme (toggle in the top bar, or `?theme=light`). All
-timestamps are wall-clock: the simulator integrates physics over
-real elapsed time, so pump runtimes, dead-head durations and the trend axis are real
-seconds.
-
----
+Sentinel is a process-aware command guard for an 11 kV distribution feeder. It observes
+commands and telemetry of the simulated feeder over Modbus TCP and MQTT and asks, for
+every command, whether it makes physical sense for the network right now. It advises;
+it never operates switchgear. Demo script: [docs/DEMO.md](docs/DEMO.md). Numbers:
+[docs/RESULTS.md](docs/RESULTS.md). Trust boundary: [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
 
 ## 1. Run it
 
-### Option A — local Python (what the demo machine uses)
+### Option A — Docker (what the judges type)
+
+```bash
+git clone https://github.com/DanonymousCoder/Sentinel.git && cd Sentinel && docker compose up
+```
+
+Broker, feeder simulator (with its Modbus TCP RTU on 5020), guard and console come up
+with healthchecks. Open **http://localhost:8080**. The operator token is in the
+`dashboard-grid` container log (`docker compose logs dashboard-grid | grep token`).
+
+### Option B — local Python (the demo laptop)
 
 Requirements: Python 3.10+, `mosquitto` on the PATH.
 
 ```bash
-pip install -r requirements.txt      # paho-mqtt, flask, pytest
-./run.sh                             # broker + both simulated processes
-./run.sh tank                        # water skid only   (./run.sh grid: feeder only)
+pip install -r requirements.txt      # pinned, hash-checked
+./run.sh                             # broker + feeder simulator + guard + console
+./run.sh --profile pipeline          # the pipeline pump station instead (portability proof)
+./run.sh --profile both              # both consoles, each sidebar links to the other
 ```
-
-Two consoles come up, one per simulated process, and each sidebar links to the
-other under **Consoles**:
 
 | Console | URL | Process |
 |---|---|---|
-| Water plant simulation | **http://localhost:8080** | tank T-101, pump P-101, valves V-101/V-102 (PRD rev 1) |
-| Grid simulation | **http://localhost:8081** | 11 kV feeder: T1/OLTC, CB-101, SW-102, TS-201, PV-1, hospital bus B3 (PRD rev 2) |
+| Grid simulation (the demo) | **http://localhost:8080** | 11 kV feeder: T1/OLTC, CB-101, SW-102, TS-201, PV-1, hospital bus B3 |
+| Pipeline simulation | **http://localhost:8081** | tank farm T-101, mainline pump P-101, MOV-201, ESD-301, DRA skid |
 
-`Ctrl-C` stops everything; logs are in `./logs` (one `plant-`, `guard-` and
-`api-` log per process).
-
-### Option B — Docker
-
-```bash
-docker compose up --build            # broker + both process stacks, same URLs
-```
+`Ctrl-C` stops everything; logs are in `./logs` (one `plant-`, `guard-` and `api-` log per process).
 
 ### Option C — by hand (four terminals)
 
 ```bash
 mosquitto -c mosquitto/mosquitto.conf
-python -m sentinel.plant.run          # process simulator, 2 Hz telemetry
-python -m sentinel.guard.run          # the command guard
-python -m sentinel.api.app            # dashboard on :8080
+python -m sentinel.plant.run          # feeder physics, 2 Hz telemetry, Modbus TCP RTU on :5020
+python -m sentinel.guard.run          # the command guard (observer only)
+python -m sentinel.api.app            # console on :8080
 ```
 
-Every Sentinel process reads `SENTINEL_PROCESS` (`tank`, the default, or
-`grid`). Prefix the three commands with `SENTINEL_PROCESS=grid` for the feeder;
-its console defaults to port 8081 (`SENTINEL_GRID_PORT`). The two processes
-share the broker under separate topic namespaces (`tank/...`, `grid/...`).
+Every Sentinel process reads `SENTINEL_PROCESS` (`grid`, the default, or `pipeline`).
+The two processes share the broker under separate topic namespaces (`grid/...`, `pipeline/...`).
 
-### Tests
+### Operator token
+
+Every mutating console endpoint (`POST /api/command`, `/api/scenario/<id>`, `/api/sim`,
+`/api/reset`) requires the operator token, sent as `X-Sentinel-Token` or `?token=`.
+The token is generated on first run, stored in `data/console-token`, and printed by
+`run.sh` and the console log as a ready-to-open link. Set `SENTINEL_CONSOLE_TOKEN`
+to choose it yourself. Reads stay open: the console is an observer's screen.
+
+### Modbus TCP
+
+The feeder RTU listens on **5020** (pipeline station: 5021). Coil and register writes
+become plant commands exactly as an attacker's would; input registers mirror telemetry.
+The passive tap decodes function codes 1/2/3/4/5/6/15/16 off the wire and publishes each
+frame to `grid/modbus/frames`, which the console's Timeline shows.
 
 ```bash
-python -m pytest tests -q             # 55 unit/acceptance tests, < 2 s
-python -m pytest tests -q             # + 3 MQTT integration tests when a broker is up
+python -m sentinel.attacks.modbus_inject coil 0 1            # cb_close, straight to the RTU
+python -m sentinel.attacks.modbus_inject register 1 1180     # AVC target 11.80 kV
+python -m sentinel.attacks.modbus_inject read                # mirror of live telemetry
 ```
 
-`tests/test_acceptance.py` maps one-to-one onto the PRD's acceptance criteria
-(section 52). `tests/test_integration.py` drives simulator → MQTT → guard →
-status and asserts detection latency under one second.
+Register map: `python -m sentinel.plant.modbus --map`.
 
----
-
-## 2. The demo (≈ 4 minutes)
-
-Use the **Scenarios** view in the dashboard, or the CLI:
+## 2. Tests and numbers
 
 ```bash
-python -m sentinel.attacks.run --list
-python -m sentinel.attacks.run unsafe_valve
+make test            # the whole suite (integration tests need a broker on 1883)
+make demo            # the four-minute demo, headless, every verdict asserted
+make metrics         # regenerate docs/RESULTS.md and the README numbers from a real run
+make check-metrics   # what CI runs: fail if the committed numbers drifted
 ```
 
-| # | Scenario | What the judge sees | Guard verdict |
-|---|----------|---------------------|---------------|
-| 1 | **Unsafe valve command** (flagship) | Plant pumping normally. One protocol-valid `outlet_close` arrives. Flow collapses, pressure climbs to shut-off head on the mimic. | **CRITICAL · SEQ-001** — "Outlet valve close conflicts with running pump" |
-| 2 | Setpoint manipulation | Operator trims +5 % (quiet). Attacker jumps to 95 %. | **HIGH · ROC-001 + ENV-001** |
-| 3 | **Slow setpoint drift** | +4 % at a time, 60 → 92 %. No single step looks wrong. | **MEDIUM · ROC-002** while still inside the band (with time-to-limit), **HIGH** once outside |
-| 4 | Pump start into closed discharge | Line correctly isolated, then an unexpected `pump_start`. | **HIGH · STATE-002** |
-| 5 | Rapid actuator sequence | Five actuator commands in four seconds. | **MEDIUM+ · SEQ-002 / SEQ-003** |
-| 6 | **Telemetry & command replay** | Controller telemetry suppressed and a frame replayed; the tank drains behind the frozen picture; a captured command is replayed verbatim. Level jumps when telemetry returns. | **MEDIUM → HIGH · TEL-002** and **HIGH · CMD-001**; advisories marked *Confidence LOW* |
-| 7 | **Legitimate maintenance** | `maintenance_on → pump_stop → outlet_close` — the same commands as an attack. | **Quiet.** Context recognised. |
-| 8 | Planned shutdown | Pump off → discharge closed → supply closed. | **Quiet.** |
-| 9 | Planned start-up | Supply → discharge → pump. | **Quiet.** |
-| 10 | Normal operations | Trims and correctly sequenced valve changes. | **Quiet.** |
-
-Suggested narrative (PRD sections 57–60):
-
-1. **Everything is normal.** Point at tank 60 %, pump ON, 89 L/min, 2.8 bar, `SYSTEM STATUS: NORMAL`.
-2. **Run scenario 1.** Do not say it is malicious. Watch the posture strip go CRITICAL *before* the pressure moves, then watch the physics confirm it: flow → 0, PT-101 → 6.3 bar, the V-102 symbol turns red, the discharge line throbs, the pressure KPI flips to *Over limit*.
-3. **Read the advisory** (Overview → Latest advisory, or the Advisories view). Command, source, the exact state it was judged against, *why* (dead-heading), the point-by-point risk contributions, and what to verify. Note the footer: *Sentinel does not act on the plant.*
-4. **Run scenario 6.** Same isolation commands, plant in MAINTENANCE — nothing above LOW. Then use the operator console to send `OUTLET CLOSE` while the pump is *running* in maintenance: MEDIUM, with the mitigation shown explicitly. Context changes the verdict; it doesn't blind the guard.
-5. **Run scenario 5.** The KPIs keep showing a comfortable state, but the *Telemetry* pill goes red, the sequence number stops advancing (`seq 41 ×12`), *Telemetry integrity* reads **Untrusted**, and the advisory escalates MEDIUM → HIGH as the replayed frame ages.
-
-**Reset demo** (top bar) returns the simulator, the guard and the timeline to nominal.
-
----
+`tests/test_grid_acceptance.py` maps one-to-one onto the PRD's acceptance criteria.
+`tests/test_grid_integration.py` drives simulator → MQTT → guard on the live broker;
+`tests/test_modbus.py` drives the RTU and the tap.
 
 ## 3. Architecture
 
 ```
-  browser  ◄── SSE ──  sentinel.api.app  (Flask, SQLite history, scenario runner)
+  browser  ◄── SSE ──  sentinel.api.app  (Flask, SQLite history, scenario runner, director panel)
                               ▲
               guard/alert · guard/status · guard/assessment
                               │
-                      sentinel.guard.run          ← observer only, no write path
+                      sentinel.guard.run          ← observer only, no write path, SQLite state
                               ▲
-                plant/telemetry · plant/command
+        plant/telemetry · plant/command · modbus/frames
                               │
                    Mosquitto MQTT broker
                               ▲
                  ┌────────────┴────────────┐
           sentinel.plant.run        sentinel.attacks
-          (physics simulator)       (scripted scenarios)
+          (power flow + Modbus RTU) (scripted scenarios, Modbus injector)
 ```
 
 | Module | Role |
 |--------|------|
-| `sentinel/plant/simulator.py` | Pure, deterministic physics: tank, inlet, pump, outlet, pressure, flow. Models dead-heading, cavitation, level limits. Accepts *any* well-formed command — like a real controller. |
-| `sentinel/guard/state.py` | The guard's mirror of the plant, telemetry-integrity tracking (sequence, age, restarts vs. replays), command history, digital-twin expected flow. |
-| `sentinel/guard/rules.py` | The detection layers. Each rule is a pure function returning weighted, human-readable `Finding`s. |
-| `sentinel/guard/risk.py` | Additive risk score, severity bands, and the narrative (summary / why / recommendation) per dominant rule. |
-| `sentinel/guard/engine.py` | Orchestration: per-command evaluation, periodic process checks with escalation-aware de-duplication, status. |
-| `sentinel/attacks/scenarios.py` | The seven scripted scenarios. |
-| `sentinel/api/` | REST + SSE backend and the vanilla HTML/CSS/JS dashboard (no build step). |
-| `sentinel/guard/catalogue.py` | Rule catalogue and thresholds served to the *Detection rules* view. |
+| `sentinel/plant/grid.py` | Feeder physics: forward-backward sweep power flow over two feeders and the tie, per-section loads, fault current, protection, AVC, concurrent faults, permits per section. Accepts *any* well-formed command — like a real controller. |
+| `sentinel/plant/modbus.py` | Modbus TCP RTU (FC 1/2/3/4/5/6/15/16) and the passive wire tap. |
+| `sentinel/guard/state.py` | The guard's mirror of the feeder, telemetry-integrity tracking, command history, digital-twin expectation, learned baseline. |
+| `sentinel/guard/grid_rules.py` | The detection layers for the feeder. Each rule is a pure function returning weighted, human-readable `Finding`s. |
+| `sentinel/guard/risk.py` · `grid_risk.py` | Additive risk score, severity bands, narrative per dominant rule. |
+| `sentinel/guard/engine.py` | Per-command evaluation, periodic process checks with escalation-aware de-duplication, confidence, persistence. |
+| `sentinel/guard/signing.py` | Per-source HMAC envelopes, monotonic counters, nonce cache, freshness window. |
+| `sentinel/attacks/grid_scenarios.py` | The nine scripted feeder scenarios. |
+| `sentinel/api/` | REST + SSE backend and the vanilla HTML/CSS/JS console (no build step, no network). |
 | `sentinel/config.py` | Every threshold and weight, in one place. |
 
-MQTT topics, each prefixed with the process namespace (`tank/` or `grid/`):
-`plant/telemetry`, `plant/command`, `plant/event`, `plant/mode`,
+MQTT topics, each prefixed with the process namespace (`grid/` or `pipeline/`):
+`plant/telemetry`, `plant/command`, `plant/event`, `plant/mode`, `modbus/frames`,
 `guard/alert`, `guard/assessment`, `guard/status` (retained), plus
 `plant/sim` (simulator-only hooks: telemetry blackout, fault inject/clear) and
 `sentinel/control` (demo reset).
 
-A switching program can name the equipment it covers — `switching_program_on`
-with value `SP-0417:CB-101,SW-102,TS-201,S1` — and only those steps are excused;
-a bare `SP-0417` covers the whole feeder.
+A switching program names the equipment it covers — `switching_program_on` with value
+`SP-0417:CB-101,SW-102,TS-201,S1` — and only those steps are excused. Permits-to-work
+are per section (`ptw_issue S1`); energising a permitted section is HIGH regardless of program.
 
-Process-specific code lives under `sentinel/domains/` (`tank.py`, `grid.py`):
-each binds its simulator (`plant/simulator.py`, `plant/grid.py`), rules
-(`guard/rules.py`, `guard/grid_rules.py`), narratives, rule catalogue,
-scenarios and the dashboard descriptor the console draws itself from. The
-engine, integrity tracking, risk arithmetic, API and dashboard shell are shared.
+Process-specific code lives under `sentinel/domains/` (`grid.py`, `pipeline.py`): each
+binds its simulator, rules, narratives, rule catalogue, scenarios and the dashboard
+descriptor the console draws itself from. Engine, integrity tracking, risk arithmetic,
+signing, API and console shell are shared.
 
 REST: `GET /api/state · /api/status · /api/alerts · /api/events · /api/assessments ·
-/api/trend · /api/stats · /api/scenarios · /api/rules · /api/export/alerts.csv · /api/stream (SSE)`,
-`POST /api/command · /api/scenario/<id> · /api/scenario/stop · /api/reset`.
-
----
+/api/trend · /api/stats · /api/scenarios · /api/rules · /api/baseline · /api/results ·
+/api/export/alerts.csv · /api/stream (SSE)`, `POST /api/command · /api/scenario/<id> ·
+/api/scenario/stop · /api/sim · /api/reset` (token required).
 
 ## 4. Detection layers and risk model
 
-`Risk = Σ finding weights`, clamped to 0–100. Bands: **0–29 LOW · 30–59 MEDIUM
-· 60–79 HIGH · 80–100 CRITICAL**. Alerts below 15 are logged as assessments
-only. Every point is traceable to a named finding in the advisory.
+`Risk = Σ finding weights`, clamped to 0–100. Bands: **LOW · MEDIUM · HIGH · CRITICAL**
+at the thresholds in `config.SEVERITY_BANDS`. Every point is traceable to a named
+finding in the advisory. The weights live in `config.WEIGHTS` and are shown, with the
+learned-versus-configured thresholds, on the console's *Rules* view.
 
-| Rule | Layer | Fires when | Weight(s) |
-|------|-------|-----------|-----------|
-| **SEQ-001** | State | `outlet_close` while pump running | +25 pump running · +35 closing discharge · +25 flow active · +10 not maintenance · −25 pump stop already commanded |
-| STATE-002 | State | `pump_start` with outlet closed | +50 · +10 not maintenance |
-| STATE-003 | State | `pump_start` below minimum suction level | +30 / +35 |
-| STATE-004 | State | `inlet_close` while pump drawing tank toward low limit | +30 (with projected time-to-limit) |
-| ROC-001 | Rate of change | Setpoint step > ±5 % / > 15 % | +15 / +25 |
-| **ROC-002** | Rate of change | ≥ 3 small setpoint steps whose net change over 10 min exceeds 15 % | +25 · +15 if the band edge is < 15 min away at this rate |
-| ENV-001 | Envelope | Setpoint outside 20–90 % | +20 |
-| ENV-002 | Envelope | Load-adding command while pressure already > 4 / > 5 bar | +12 / +25 |
-| SEQ-002 | Timing | ≥ 4 actuator commands in 5 s · ≥ 8 in 30 s | +25 · +12 |
-| SEQ-003 | Sequence | Same actuator driven both ways inside 5 s | +15 |
-| SEQ-004 | Sequence | Known unsafe pattern, e.g. `pump_start → outlet_close` | +25 |
-| CMD-001 | Integrity | Command timestamp > 30 s old / in the future, or message id already processed | +30 · +40 |
-| TEL-001 | Integrity | Newest telemetry > 3 s old | +25 |
-| TEL-002 | Integrity | Sequence number repeated ≥ 3× (replay) | +35 |
-| TEL-003 | Integrity | Sequence went backwards with an *old* timestamp | +25 |
-| PHY-001 | Physics | Reported flow disagrees with pump/valve state for > 4 s | +25 |
-| SRC-001 | Context | Unrecognised source, or maintenance host outside maintenance | +10 |
-| **CTX-001** | Context | Plant in MAINTENANCE and command is an isolation/restoration step | **−30** |
-
-Worked example (PRD section 25): pump ON, 88 L/min, AUTO, `outlet_close` from
-a maintenance laptop → 25 + 35 + 25 + 10 + 10 = **CRITICAL 100**. The same
-command in MAINTENANCE with the pump already stopped → no findings → **quiet**.
-With the pump still running in MAINTENANCE → 85 − 30 = **MEDIUM 55**, with the
-mitigation printed in the advisory. A fully cancelled command that would have
-been ≥ MEDIUM is reported as a LOW `CTX-001` advisory that states what it
-*would* have scored — context is visible, not silent.
-
----
+| Rule | Layer | Fires when |
+|------|-------|-----------|
+| **STATE-001** | State | `cb_close` while a fault indicator is set on a section the close energises, or protection is tripped and not reset |
+| STATE-002 | State | `cb_open` with load on the feeder and no alternate path |
+| STATE-003 | State | a close that parallels F1 and F2 through TS-201 |
+| STATE-004 | State | a close that energises a section under permit-to-work — never excused by a program |
+| STATE-005 | State | `sw_open` that isolates the hospital with TS-201 open |
+| STATE-006 | State | manual tap step with the busbar already outside statutory limits |
+| STATE-007 | State | PV curtailed while the feeder is near its rating |
+| ROC-001 | Rate of change | AVC target or tap step far beyond a normal trim |
+| **ROC-002** | Rate of change | small target steps whose net movement heads for the statutory limit, with time-to-limit |
+| ENV-001 / 002 | Envelope | target outside the statutory band; command with voltage or current already near a limit |
+| SEQ-002 / 003 / 004 | Timing, sequence | rapid switching, breaker pumping, known unsafe patterns |
+| CMD-001 | Integrity | replayed command: stale timestamp, duplicate id, non-monotonic sequence, bad signature |
+| TEL-001 / 002 / 003 | Integrity | stale telemetry, replayed frames, injected frames |
+| PHY-001 | Physics | busbar or current disagrees with what tap, source and loads imply |
+| SRC-001 | Context | unsigned or unknown source; field host outside a program |
+| BASE-001 | Baseline | cadence, value or command mix outside this source's learned history |
+| CTX-001 / 002 / 003 | Context | program covers the step; restoration after a cleared fault; alternate path available (negative weights) |
 
 ## 5. What Sentinel does when it is unsure
 
-Every advisory carries a **confidence** (HIGH / REDUCED / LOW) and a plain
-statement of what could not be verified. When telemetry is stale or replayed,
-when instruments disagree with the physics, or when there is no telemetry at
-all, Sentinel **still raises the advisory** — integrity findings add to the
-score rather than suppress it — marks it LOW/REDUCED confidence, says exactly
-why, and asks for the plant to be confirmed by other means. It never blocks:
-safety-direction commands (pump stop, valve open, maintenance on) are never
-flagged as unsafe on their own, and the guard has no write path to the plant.
-The same policy is shown in the dashboard's *Detection rules* view.
+Every advisory carries a **confidence** (HIGH / REDUCED / LOW) and a plain statement of
+what could not be verified. When telemetry is stale or replayed, when instruments disagree
+with the physics, or when there is no telemetry at all, Sentinel **still raises the
+advisory** — integrity findings add to the score rather than suppress it — marks it
+LOW/REDUCED confidence, says exactly why, and asks for the network state to be confirmed
+by field indication. It never blocks: safe-direction commands (opening a faulted breaker,
+cancelling a permit, AVC to AUTO) are never flagged alone, and the guard has no write path
+to any switchgear or setpoint. The same policy is on the console's *Rules* view.
 
-## 5. Design decisions worth knowing
+## 6. Design decisions worth knowing
 
-- **The guard has no write path to the plant.** It subscribes and publishes
-  advisories; `tests/test_acceptance.py::test_guard_never_acts_on_the_plant`
-  pins this (PRD FR-011).
-- **Deterministic before clever.** Additive weights over an ML model, because a
-  judge can follow every number (PRD section 24).
-- **Controller restart ≠ replay.** A lower sequence number with a *newer*
-  timestamp is a counter restart; only an older timestamp counts as replay.
-  Regressions clear after 20 clean frames so the demo is repeatable.
-- **Instrument lag is not an anomaly.** The physics-residual rule needs the
-  mismatch to persist for 4 s.
-- **Escalation re-alerts immediately.** A persisting process condition
-  re-alerts every 30 s — unless its severity rises, in which case the engineer
-  hears about it at once (replay: MEDIUM → HIGH as the frame goes stale).
-- **PRD deviations.** The PRD's worked example labels a score of 95 "HIGH" while
-  its own banding table puts 80+ in CRITICAL; the table wins. The flagship rule
-  keeps the id `SEQ-001` to match the PRD's alert example even though it is a
-  state rule.
+See [docs/DECISIONS.md](docs/DECISIONS.md) for the log. The short list:
+
+- **The guard has no write path.** It subscribes and publishes advisories;
+  `tests/test_grid_acceptance.py::test_guard_never_operates_switchgear` pins this.
+- **Deterministic before clever.** Additive weights a judge can follow; the learned
+  baseline only adds a small, explained contribution.
+- **Controller restart ≠ replay.** A lower sequence number with a *newer* timestamp is a
+  counter restart; only an older timestamp counts as replay.
+- **Instrument lag is not an anomaly.** The physics-residual rule needs the mismatch to persist.
+- **Escalation re-alerts immediately.** A persisting condition re-alerts every 30 s — unless
+  its severity rises, in which case the engineer hears about it at once.
+- **A real plant has no narrator.** Scenario narration is off on the operator timeline in
+  judge mode and lives in the director panel.
