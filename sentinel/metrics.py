@@ -116,6 +116,29 @@ def engine_latency_ms(samples: int = 400) -> list[float]:
     return out
 
 
+def baseline_training() -> dict[str, dict[str, Any]]:
+    """Replay every legitimate scenario of a process through one guard, in order, three times
+    over (a shift's worth of traffic), and report what the baseline learned."""
+    out: dict[str, dict[str, Any]] = {}
+    for pid in process.KNOWN:
+        process.use(pid)
+        rig = Rig(seconds_of_warmup=30)
+        legit = [s for s in ordered(process.domain().SCENARIOS) if s.kind != "attack"]
+        for _ in range(3):
+            for scenario in legit:
+                for step in scenario.steps:
+                    rig.advance(step.delay)
+                    if step.kind == "command":
+                        rig.send(step.action, step.value, step.source, settle=0)
+                    elif step.kind == "sim":
+                        rig.sim(step.action, step.value, settle=0)
+                    elif step.kind == "wait":
+                        rig.advance(step.seconds)
+                rig.advance(20)
+        out[pid] = rig.guard.state.baseline.summary()
+    return out
+
+
 def confusion(results: dict[str, list[dict[str, Any]]]) -> dict[str, int]:
     m = {"tp": 0, "fn": 0, "tn": 0, "fp": 0}
     for rows in results.values():
@@ -211,6 +234,26 @@ def build() -> tuple[str, str]:
     L.append("|---|---|---|---|---|")
     L.append(f"| {len(eng)} | {_pct(eng, 0.5):.2f} | {_pct(eng, 0.95):.2f} | {max(eng):.2f} | {statistics.mean(eng):.2f} |")
     L.append("")
+    L.append("## Learned baseline, trained on the legitimate corpus")
+    L.append("")
+    L.append("Three passes over every legitimate scenario of each process, one guard, in order. "
+             "The learner needs 20 samples before it speaks; below that the configured thresholds rule alone.")
+    L.append("")
+    for pid, b in baseline_training().items():
+        L.append(f"**{evaluate.PROCESS_NAMES.get(pid, pid)}** — configured cadence: {b['configured']['cadence']}; "
+                 f"configured range: {b['configured']['range']}")
+        L.append("")
+        L.append("| Learned | Source / action | Value | Samples |")
+        L.append("|---|---|---|---|")
+        for src, s in sorted(b["sources"].items()):
+            cadence = (f"median {s['median_interval_s']} s · floor {s['floor_interval_s']} s · EWMA {s['ewma_interval_s']} s"
+                       if s["median_interval_s"] is not None else "—")
+            L.append(f"| cadence | {src} | {cadence}{'' if s['ready'] else ' (learning)'} | {s['samples']} |")
+            if s["mix"]:
+                L.append(f"| command mix | {src} | " + " · ".join(f"{a} {int(f * 100)} %" for a, f in s["mix"].items()) + f" | {sum(1 for _ in s['mix'])} actions |")
+        for action, v in sorted(b["actions"].items()):
+            L.append(f"| range | {action} | {v['p05']} – {v['p95']}{'' if v['ready'] else ' (learning)'} | {v['samples']} |")
+        L.append("")
     L.append("## Every scenario")
     L.append("")
     L.append(evaluate.markdown(results))

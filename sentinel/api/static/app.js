@@ -76,7 +76,7 @@ function connect() {
         if (S.trend.length > 300) S.trend.shift();
         renderProcess(); if (S.view === 'overview') { renderChart(); renderSparklines(); }
         break;
-      case 'status': S.status = data; renderStatus(); break;
+      case 'status': S.status = data; renderStatus(); if (S.view === 'rules') renderBaseline(); break;
       case 'alert': {
         S.alerts.unshift(data);
         const cur = S.selected, stale = !cur || Date.now() - cur.ts > 60000;
@@ -151,6 +151,7 @@ function route() {
   $('page-dot').className = 'dot ' + (eyebrow === 'Monitor' ? '' : 'ok');
   window.scrollTo({ top: 0 });
   renderAll();
+  if (S.view === 'rules') renderBaseline();
 }
 window.addEventListener('hashchange', route);
 
@@ -559,7 +560,23 @@ async function runScenario(id) {
   toast(`Running: ${res.title}`);
   setTimeout(() => { document.querySelectorAll('[data-run]').forEach((b) => (b.disabled = false)); bar.style.transition = 'none'; bar.style.width = '0'; }, ms + 1500);
 }
+function renderBaseline() {
+  const b = (S.status || {}).baseline; const tb = $('tbl-baseline').querySelector('tbody');
+  if (!b) { tb.innerHTML = '<tr><td colspan="4" class="empty">Waiting for the guard</td></tr>'; return; }
+  const rows = [];
+  const srcs = Object.entries(b.sources || {});
+  if (!srcs.length) rows.push(['Cadence per source', b.configured.cadence, 'nothing learned yet', `0 / ${b.min_samples}`]);
+  for (const [src, s] of srcs) rows.push([`Cadence · ${src}`, b.configured.cadence,
+    s.median_interval_s == null ? '—' : `median ${s.median_interval_s} s · floor ${s.floor_interval_s} s · EWMA ${s.ewma_interval_s} s${s.ready ? '' : ' (learning)'}`, `${s.samples} / ${b.min_samples}`]);
+  const acts = Object.entries(b.actions || {});
+  const configuredFor = (a) => a === 'avc_target' ? b.configured.avc_target : a === 'setpoint' ? b.configured.setpoint : '—';
+  if (!acts.length) rows.push(['Value ranges', b.configured.range, 'nothing learned yet', `0 / ${b.min_samples}`]);
+  for (const [a, v] of acts) rows.push([`Range · ${a}`, configuredFor(a), v.p05 == null ? '—' : `${v.p05} – ${v.p95}${v.ready ? '' : ' (learning)'}`, `${v.samples} / ${b.min_samples}`]);
+  for (const [src, s] of srcs) if (Object.keys(s.mix || {}).length) rows.push([`Command mix · ${src}`, b.configured.mix, Object.entries(s.mix).map(([a, f]) => `${a} ${Math.round(f * 100)} %`).join(' · '), `${Object.values(s.mix).length} actions`]);
+  tb.innerHTML = rows.map((r) => `<tr><td class="msg">${esc(r[0])}</td><td class="muted">${esc(r[1])}</td><td>${esc(r[2])}</td><td class="mono">${esc(r[3])}</td></tr>`).join('');
+}
 function renderRules() {
+  renderBaseline();
   const th = S.thresholds || {};
   const pol = th.policy || {}, env = th.envelope || {};
   $('policy').innerHTML = [['When Sentinel is unsure', pol.when_unsure], ['What it never does', pol.never_blocks], ['Who decides', pol.human_decides], ['What it cannot see', pol.limits]]

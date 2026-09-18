@@ -223,6 +223,7 @@ class CommandGuard:
             "alerts_total": len(self.alerts),
             "uptime_s": round(now - self.started, 1),
             "recent_alerts": len(recent),
+            "baseline": self.state.baseline.summary(),
         }
 
     def stats(self) -> dict[str, Any]:

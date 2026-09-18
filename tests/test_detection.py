@@ -327,3 +327,23 @@ def test_guard_snapshot_restores_history_baseline_and_advisories():
     assert fresh.state.history.times_seen(rig.guard.state.history.items[-1].id) == 1
     assert fresh.commands_seen == rig.guard.commands_seen
     assert fresh.state.baseline.values["setpoint"] == rig.guard.state.baseline.values["setpoint"]
+
+
+def test_baseline_flags_a_first_ever_action_from_a_source_with_history():
+    rig = Rig()
+    for i in range(22):
+        rig.send("setpoint", 58 + (i % 5), settle=3)                      # operator-hmi only ever trims
+    assert "BASE-001" in _findings_for(rig, "outlet_close")               # first outlet_close ever from it
+    assert "BASE-001" not in _findings_for(rig, "setpoint", 60)
+
+
+def test_baseline_summary_reports_learned_next_to_configured():
+    rig = Rig()
+    for i in range(22):
+        rig.send("setpoint", 58 + (i % 5), settle=3)
+    s = rig.guard.state.baseline.summary()
+    assert s["sources"]["operator-hmi"]["ready"] and s["actions"]["setpoint"]["ready"]
+    assert s["actions"]["setpoint"]["p05"] >= 58 and s["actions"]["setpoint"]["p95"] <= 62
+    assert abs(s["sources"]["operator-hmi"]["ewma_interval_s"] - 3.0) < 0.5
+    assert "%" in s["configured"]["setpoint"] and "kV" in s["configured"]["avc_target"]
+    assert rig.guard.status(now=rig.now)["baseline"]["min_samples"] == 20

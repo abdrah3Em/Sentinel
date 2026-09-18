@@ -398,6 +398,9 @@ def rule_learned_baseline(ctx: RuleContext) -> list[Finding]:
     value = ctx.state.baseline.value_deviation(ctx.command)
     if value:
         findings.append(Finding("BASE-001", "baseline", W["BASELINE_DEVIATION"], value, "Controller"))
+    mix = ctx.state.baseline.mix_deviation(ctx.command)
+    if mix:
+        findings.append(Finding("BASE-001", "baseline", W["BASELINE_DEVIATION"], mix.capitalize(), "Command source"))
     return findings
 
 
