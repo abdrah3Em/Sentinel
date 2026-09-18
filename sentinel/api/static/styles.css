@@ -603,3 +603,13 @@ body.ready .scale i { transition: width 0.4s var(--ease), background-color var(-
 .mimic .fi.set { fill: var(--orange); stroke: var(--orange); }
 .mimic .flowline.rev { animation-direction: reverse; }
 .chart-host .series.aux { opacity: 0.55; }
+
+/* ------------------------------------------------------------------ director panel (presenter only) */
+.director { position: fixed; right: 24px; bottom: 24px; width: min(420px, calc(100vw - 48px)); max-height: 60vh; z-index: 40; display: flex; flex-direction: column; gap: 10px; padding: 16px; background: var(--panel); border: 1px solid var(--stroke); border-radius: var(--radius-cards); }
+.director-head { display: flex; align-items: center; gap: 12px; }
+.director-head .muted { font-size: var(--text-caption); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.director-note { font-size: var(--text-caption); color: var(--muted); }
+.director-log { list-style: none; margin: 0; padding: 0; overflow: auto; display: flex; flex-direction: column; gap: 8px; }
+.director-log li { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; align-items: start; font-size: var(--text-body-sm); }
+.director-log .t { font-family: var(--font-geist-mono); font-size: var(--text-caption); color: var(--muted); }
+#director-toggle.on { border-color: var(--orange); color: var(--orange); }

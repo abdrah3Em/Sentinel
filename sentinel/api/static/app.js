@@ -38,6 +38,8 @@ const fmtTpl = (tpl, obj) => tpl.replace(/\{(\w+)(?::([^}]+))?\}/g, (_, k, spec)
 
 // Operator token: taken from ?token=… once, kept per browser, sent on every write.
 let TOKEN = '';
+let DIRECTOR = false;
+try { const d = new URLSearchParams(location.search).get('director'); if (d !== null) localStorage.setItem('sentinel-director', d === '1' ? '1' : '0'); DIRECTOR = localStorage.getItem('sentinel-director') === '1'; } catch (e) {}
 try { const q = new URLSearchParams(location.search).get('token'); if (q) localStorage.setItem('sentinel-token', q); TOKEN = localStorage.getItem('sentinel-token') || ''; } catch (e) {}
 async function post(url, body) {
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(TOKEN ? { 'X-Sentinel-Token': TOKEN } : {}) }, body: body === undefined ? undefined : JSON.stringify(body) });
@@ -488,7 +490,7 @@ function timelineRows() {
   for (const a of S.alerts) rows.push({ ts: a.ts, kind: 'alert', type: badge(a.level), text: `${a.summary} · ${a.rule} · risk ${a.score}`, source: a.command?.source || 'guard', alert: a, q: `${a.summary} ${a.rule} ${a.level}` });
   for (const e of S.events) {
     const p = e.payload || {}, d = p.detail || '';
-    if (e.type === 'SCENARIO') rows.push({ ts: e.ts, kind: 'demo', type: badge('demo', p.phase === 'START' || p.phase === 'END' ? 'Scenario' : 'Narration'), text: d, source: e.source, q: d });
+    if (e.type === 'SCENARIO') { if (DIRECTOR) rows.push({ ts: e.ts, kind: 'demo', type: badge('demo', p.phase === 'START' || p.phase === 'END' ? 'Scenario' : 'Narration'), text: d, source: e.source, q: d }); }
     else if (e.type === 'COMMAND_ACCEPTED') { const as = byCmd.get(p.command_id);
       rows.push({ ts: e.ts, kind: 'cmd', type: badge('accent', 'Command'), text: d, source: e.source, verdict: as ? (as.verdict === 'NORMAL' ? badge('ok', 'Consistent') : badge(as.verdict, `${title(as.verdict)} · ${as.score}`)) : '', q: d }); }
     else if (e.type === 'PHYSICAL' || e.type === 'PROCESS' || e.type === 'PROTECTION') rows.push({ ts: e.ts, kind: 'physical', type: badge(p.severity === 'HIGH' ? 'crit' : p.severity === 'MEDIUM' ? 'warn' : 'plain', title(e.type)), text: d, source: e.source, q: d });
@@ -496,7 +498,17 @@ function timelineRows() {
   }
   return rows.sort((a, b) => b.ts - a.ts);
 }
+function renderDirector() {
+  const panel = $('director'); panel.hidden = !DIRECTOR;
+  $('director-toggle').classList.toggle('on', DIRECTOR);
+  $('chip-demo').hidden = !DIRECTOR;
+  if (!DIRECTOR) return;
+  const notes = S.events.filter((e) => e.type === 'SCENARIO').slice(0, 14);
+  $('director-sub').textContent = notes.length ? `${esc(notes[0].payload?.title || '')}` : 'no scenario running';
+  $('director-log').innerHTML = notes.length ? notes.map((e) => { const p = e.payload || {}; return `<li><span class="t">${fmtTime(e.ts)}</span>${badge('demo', p.phase === 'START' || p.phase === 'END' || p.phase === 'ABORT' ? 'Scenario' : p.phase === 'STEP' ? 'Step' : 'Say')}<span>${esc(p.detail || '')}</span></li>`; }).join('') : '<li class="muted">Run a scenario; its script appears here.</li>';
+}
 function renderTables() {
+  renderDirector();
   const rows = timelineRows();
   if (S.view === 'overview') {
     const tb = $('tbl-recent').querySelector('tbody');
@@ -603,6 +615,9 @@ document.addEventListener('click', async (ev) => {
   if (tf) { S.tlFilter = tf.dataset.f; document.querySelectorAll('#tl-filters .chip').forEach((c) => c.classList.toggle('active', c === tf)); renderTables(); return; }
 });
 $('tl-search').addEventListener('input', (ev) => { S.tlSearch = ev.target.value; renderTables(); });
+function setDirector(on) { DIRECTOR = on; try { localStorage.setItem('sentinel-director', on ? '1' : '0'); } catch (e) {} renderTables(); }
+$('director-toggle').addEventListener('click', () => setDirector(!DIRECTOR));
+$('director-close').addEventListener('click', () => setDirector(false));
 $('reset').addEventListener('click', async () => { const r = await post('/api/reset'); if (!r.ok) toast(r.error); });
 $('theme').addEventListener('click', () => {
   const light = document.documentElement.dataset.theme !== 'light';
