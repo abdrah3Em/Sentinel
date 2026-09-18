@@ -41,3 +41,8 @@ Each entry: what was decided, what was rejected, why. Newest last.
 **Decided:** compose and Dockerfile were validated by parsing and by the digests/hashes they pin; the fresh-clone `docker compose up` run (V3) is recorded as not proven here. The same services run from `./run.sh`, the healthcheck commands were executed by hand against the running services.
 **Rejected:** claiming V3 passed.
 **Why:** no Docker or Podman on the machine and no privilege to install one.
+
+## D9 — The README frames Sentinel as an energy guard for two processes
+**Decided:** the README opens on energy infrastructure with the feeder and the oil pipeline pump station as two first-class processes on one engine; the feeder stays the four-minute live demo.
+**Rejected:** the earlier "grid-only first 60 lines, pipeline as a portability footnote" framing.
+**Why:** the entry covers both energy assets; hiding one under-sells the engine.

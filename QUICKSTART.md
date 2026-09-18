@@ -1,9 +1,10 @@
 # Sentinel — Quickstart
 
-Sentinel is a process-aware command guard for an 11 kV distribution feeder. It observes
-commands and telemetry of the simulated feeder over Modbus TCP and MQTT and asks, for
-every command, whether it makes physical sense for the network right now. It advises;
-it never operates switchgear. Demo script: [docs/DEMO.md](docs/DEMO.md). Numbers:
+Sentinel is a process-aware command guard for energy infrastructure: an 11 kV
+distribution feeder (the live demo) and a crude oil pipeline pump station, on one
+detector core. It observes commands and telemetry over Modbus TCP and MQTT and asks, for
+every command, whether it makes physical sense for the process right now. It advises;
+it never operates the plant. Demo script: [docs/DEMO.md](docs/DEMO.md). Numbers:
 [docs/RESULTS.md](docs/RESULTS.md). Trust boundary: [docs/THREAT-MODEL.md](docs/THREAT-MODEL.md).
 
 ## 1. Run it
@@ -26,7 +27,7 @@ Requirements: Python 3.10+, `mosquitto` on the PATH.
 ```bash
 pip install -r requirements.txt      # pinned, hash-checked
 ./run.sh                             # broker + feeder simulator + guard + console
-./run.sh --profile pipeline          # the pipeline pump station instead (portability proof)
+./run.sh --profile pipeline          # the oil pipeline pump station instead
 ./run.sh --profile both              # both consoles, each sidebar links to the other
 ```
 
