@@ -134,54 +134,75 @@
               </svg>
               <svg id="mimic-grid" class="mimic" viewBox="0 0 620 340" hidden>
                 <!-- T1 33/11 kV with OLTC -->
-                <text class="lbl" x="52" y="98">T1 33/11 kV</text>
-                <circle class="xfmr" cx="42" cy="150" r="17"/><circle class="xfmr" cx="62" cy="150" r="17"/>
-                <text class="lbl" id="g-tap" x="52" y="196">TAP +0</text>
-                <path class="sec" d="M79 150 H108"/>
-                <!-- 11 kV busbar -->
-                <line class="bus" x1="110" y1="120" x2="110" y2="180"/>
-                <text class="lbl" x="110" y="108">BB-101</text>
-                <text class="gv" id="g-vbus" x="118" y="214">—</text>
+                <text class="lbl" x="40" y="104">T1 OLTC</text>
+                <circle class="xfmr" cx="30" cy="150" r="13"/><circle class="xfmr" cx="46" cy="150" r="13"/>
+                <text class="lbl" id="g-tap" x="40" y="192">TAP +0</text>
+                <path class="sec" d="M59 150 H70"/>
+                <!-- BB-101 -->
+                <line class="bus" x1="72" y1="122" x2="72" y2="178"/>
+                <text class="lbl" x="72" y="112">BB-101</text>
+                <text class="gv" id="g-vbus" x="72" y="206">—</text>
                 <!-- CB-101 -->
-                <path class="sec" id="g-l0" d="M110 150 H136"/>
-                <g class="sw" id="g-cb"><rect x="136" y="137" width="26" height="26" rx="3"/><path class="blade" d="M140 160 L158 140"/><text class="lbl" x="149" y="126">CB-101</text></g>
+                <path class="sec" id="g-l0" d="M72 150 H82"/>
+                <g class="sw" id="g-cb"><rect x="82" y="139" width="22" height="22" rx="3"/><path class="blade" d="M85 158 L101 142"/><text class="lbl" x="93" y="130">CB-101</text></g>
                 <!-- S1 -->
-                <path class="sec" id="g-s1" d="M162 150 H250"/><path class="flowline" id="g-f1" d="M162 150 H250"/>
-                <text class="lbl" x="196" y="140">S1</text><circle class="fi" id="g-fi-S1" cx="216" cy="137" r="3"/>
-                <path class="bolt" id="g-bolt-S1" d="M210 128 l-8 14 h9 l-8 16"/>
-                <!-- B1 residential -->
-                <g class="node" id="g-b1"><circle cx="250" cy="150" r="6"/><path class="load" d="M250 156 V176"/><path class="larrow" d="M250 184 l-5 -8 h10 z"/>
-                  <text class="lbl" x="250" y="202">B1 residential</text><text class="gv" id="g-vb1" x="250" y="220">—</text><text class="stat" id="g-lb1" x="250" y="236">—</text></g>
+                <path class="sec" id="g-s1" d="M104 150 H166"/><path class="flowline" id="g-f1" d="M104 150 H166"/>
+                <text class="lbl" x="128" y="140">S1</text><circle class="fi" id="g-fi-S1" cx="146" cy="137" r="3"/>
+                <path class="bolt" id="g-bolt-S1" d="M138 128 l-8 14 h9 l-8 16"/>
+                <!-- B1 -->
+                <g class="node" id="g-b1"><circle cx="166" cy="150" r="6"/><path class="load" d="M166 156 V174"/><path class="larrow" d="M166 182 l-5 -8 h10 z"/>
+                  <text class="lbl" x="166" y="200">B1 residential</text><text class="gv" id="g-vb1" x="166" y="218">—</text><text class="stat" id="g-lb1" x="166" y="234">—</text></g>
                 <!-- SW-102 -->
-                <path class="sec" id="g-l1" d="M256 150 H287"/>
-                <g class="sw" id="g-sw"><rect x="287" y="137" width="26" height="26" rx="3"/><path class="blade" d="M291 160 L309 140"/><text class="lbl" x="300" y="126">SW-102</text></g>
+                <path class="sec" id="g-l1" d="M172 150 H184"/>
+                <g class="sw" id="g-sw"><rect x="184" y="139" width="22" height="22" rx="3"/><path class="blade" d="M187 158 L203 142"/><text class="lbl" x="195" y="130">SW-102</text></g>
                 <!-- S2 -->
-                <path class="sec" id="g-s2" d="M313 150 H400"/><path class="flowline" id="g-f2" d="M313 150 H400"/>
-                <text class="lbl" x="346" y="140">S2</text><circle class="fi" id="g-fi-S2" cx="366" cy="137" r="3"/>
-                <path class="bolt" id="g-bolt-S2" d="M360 128 l-8 14 h9 l-8 16"/>
-                <!-- B2 industrial + PV -->
-                <g class="pv" id="g-pv"><circle cx="400" cy="106" r="8"/><path d="M400 94v-4M400 122v-4M388 106h-4M416 106h4M391.5 97.5l-3-3M411.5 114.5l-3-3M391.5 114.5l-3 3M411.5 97.5l-3 3"/><path d="M400 118 V144"/></g>
-                <text class="stat" id="g-pvkw" x="400" y="84">PV —</text>
-                <g class="node" id="g-b2"><circle cx="400" cy="150" r="6"/><path class="load" d="M400 156 V176"/><path class="larrow" d="M400 184 l-5 -8 h10 z"/>
-                  <text class="lbl" x="400" y="202">B2 industrial</text><text class="gv" id="g-vb2" x="400" y="220">—</text><text class="stat" id="g-lb2" x="400" y="236">—</text></g>
+                <path class="sec" id="g-s2" d="M206 150 H268"/><path class="flowline" id="g-f2" d="M206 150 H268"/>
+                <text class="lbl" x="230" y="140">S2</text><circle class="fi" id="g-fi-S2" cx="248" cy="137" r="3"/>
+                <path class="bolt" id="g-bolt-S2" d="M240 128 l-8 14 h9 l-8 16"/>
+                <!-- B2 + PV -->
+                <g class="pv" id="g-pv"><circle cx="268" cy="104" r="7"/><path d="M268 93v-3M268 115v-3M258 104h-3M278 104h3M261 97l-2-2M275 111l-2-2M261 111l-2 2M275 97l-2 2"/><path d="M268 111 V144"/></g>
+                <text class="stat" id="g-pvkw" x="268" y="84">PV —</text>
+                <g class="node" id="g-b2"><circle cx="268" cy="150" r="6"/><path class="load" d="M268 156 V174"/><path class="larrow" d="M268 182 l-5 -8 h10 z"/>
+                  <text class="lbl" x="268" y="200">B2 industrial</text><text class="gv" id="g-vb2" x="268" y="218">—</text><text class="stat" id="g-lb2" x="268" y="234">—</text></g>
                 <!-- S3 -->
-                <path class="sec" id="g-s3" d="M406 150 H490"/><path class="flowline" id="g-f3" d="M406 150 H490"/>
-                <text class="lbl" x="438" y="140">S3</text><circle class="fi" id="g-fi-S3" cx="458" cy="137" r="3"/>
-                <path class="bolt" id="g-bolt-S3" d="M452 128 l-8 14 h9 l-8 16"/>
-                <!-- B3 hospital (critical) -->
-                <g class="node crit" id="g-b3"><circle cx="490" cy="150" r="8"/><path class="cross" d="M490 146v8M486 150h8"/><path class="load" d="M490 158 V176"/><path class="larrow" d="M490 184 l-5 -8 h10 z"/>
-                  <text class="lbl" x="490" y="202">B3 hospital</text><text class="gv" id="g-vb3" x="490" y="220">—</text><text class="stat" id="g-lb3" x="490" y="236">—</text><text class="stat" x="490" y="250">critical load</text></g>
+                <path class="sec" id="g-s3" d="M274 150 H336"/><path class="flowline" id="g-f3" d="M274 150 H336"/>
+                <text class="lbl" x="298" y="140">S3</text><circle class="fi" id="g-fi-S3" cx="316" cy="137" r="3"/>
+                <path class="bolt" id="g-bolt-S3" d="M308 128 l-8 14 h9 l-8 16"/>
+                <!-- B3 hospital -->
+                <g class="node crit" id="g-b3"><circle cx="336" cy="150" r="8"/><path class="cross" d="M336 146v8M332 150h8"/><path class="load" d="M336 158 V174"/><path class="larrow" d="M336 182 l-5 -8 h10 z"/>
+                  <text class="lbl" x="336" y="200">B3 hospital</text><text class="gv" id="g-vb3" x="336" y="218">—</text><text class="stat" id="g-lb3" x="336" y="234">—</text><text class="stat" x="336" y="248">critical load</text></g>
                 <!-- TS-201 tie -->
-                <path class="sec" id="g-l3" d="M498 150 H527"/>
-                <g class="sw" id="g-tie"><rect x="527" y="137" width="26" height="26" rx="3"/><path class="blade" d="M531 160 L549 140"/><text class="lbl" x="540" y="126">TS-201</text></g>
-                <path class="sec" d="M553 150 H578"/>
-                <!-- F2 alternate source -->
-                <g class="src"><circle cx="592" cy="150" r="14"/><text class="lbl" x="592" y="126">F2</text><text class="gv" x="592" y="184">11.0 kV</text></g>
-                <!-- fault-current flash on the breaker -->
-                <circle class="flash" id="g-flash" cx="149" cy="150" r="30"/>
+                <path class="sec" id="g-l3" d="M344 150 H356"/>
+                <g class="sw" id="g-tie"><rect x="356" y="139" width="22" height="22" rx="3"/><path class="blade" d="M359 158 L375 142"/><text class="lbl" x="367" y="130">TS-201</text></g>
+                <path class="sec" id="g-l4" d="M378 150 H410"/><path class="flowline" id="g-ft" d="M378 150 H410"/>
+                <!-- B4 commercial (labels above) -->
+                <g class="node" id="g-b4"><circle cx="410" cy="150" r="6"/>
+                  <text class="lbl" x="410" y="112">B4 commercial</text><text class="gv" id="g-vb4" x="410" y="98">—</text><text class="stat" id="g-lb4" x="410" y="84">—</text></g>
+                <!-- S4 to CB-201 / BB-201 / T2 -->
+                <path class="sec" id="g-s4" d="M416 150 H478"/><path class="flowline" id="g-f4" d="M478 150 H416"/>
+                <text class="lbl" x="440" y="140">S4</text><circle class="fi" id="g-fi-S4" cx="458" cy="137" r="3"/>
+                <path class="bolt" id="g-bolt-S4" d="M450 128 l-8 14 h9 l-8 16"/>
+                <g class="sw" id="g-cb2"><rect x="478" y="139" width="22" height="22" rx="3"/><path class="blade" d="M481 158 L497 142"/><text class="lbl" x="489" y="130">CB-201</text></g>
+                <path class="sec" id="g-l5" d="M500 150 H520"/>
+                <line class="bus" x1="522" y1="122" x2="522" y2="178"/>
+                <text class="lbl" x="522" y="112">BB-201</text>
+                <text class="gv" id="g-vbus2" x="522" y="206">—</text>
+                <path class="sec" d="M524 150 H536"/>
+                <circle class="xfmr" cx="549" cy="150" r="13"/><circle class="xfmr" cx="565" cy="150" r="13"/>
+                <text class="lbl" x="557" y="104">T2 fixed</text>
+                <text class="lbl" x="557" y="192">Feeder F2</text>
+                <!-- S5 down from B4 to B5 -->
+                <path class="sec" id="g-s5" d="M410 156 V230"/><path class="flowline" id="g-f5" d="M410 156 V230"/>
+                <text class="lbl" x="424" y="186">S5</text><circle class="fi" id="g-fi-S5" cx="424" cy="196" r="3"/>
+                <path class="bolt" id="g-bolt-S5" d="M396 176 l-8 14 h9 l-8 16"/>
+                <g class="node" id="g-b5"><circle cx="410" cy="236" r="6"/><path class="load" d="M416 236 H432"/><path class="larrow" d="M440 236 l-8 -5 v10 z"/>
+                  <text class="lbl left" x="448" y="232">B5 residential</text><text class="gv left" id="g-vb5" x="448" y="248">—</text><text class="stat left" id="g-lb5" x="448" y="262">—</text></g>
+                <!-- fault-current flashes -->
+                <circle class="flash" id="g-flash" cx="93" cy="150" r="28"/>
+                <circle class="flash" id="g-flash2" cx="489" cy="150" r="28"/>
                 <!-- accumulators -->
-                <text class="stat left" id="g-stats" x="30" y="292">—</text>
-                <text class="stat left" id="g-ctx" x="30" y="312">—</text>
+                <text class="stat left" id="g-stats" x="24" y="296">—</text>
+                <text class="stat left" id="g-ctx" x="24" y="314">—</text>
               </svg>
               <div class="mimic-note" id="mimic-note">Waiting for telemetry…</div>
             </div>

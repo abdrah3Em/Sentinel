@@ -60,21 +60,30 @@ class GridTelemetry:
     v_b1_kv: float = 0.0
     v_b2_kv: float = 0.0
     v_b3_kv: float = 0.0
+    v_b4_kv: float = 0.0
+    v_b5_kv: float = 0.0
+    v_bus2_kv: float = 0.0
     i_feeder_a: float = 0.0
+    i_f2_a: float = 0.0
     p_feeder_kw: float = 0.0
     load_b1_kw: float = 0.0
     load_b2_kw: float = 0.0
     load_b3_kw: float = 0.0
+    load_b4_kw: float = 0.0
+    load_b5_kw: float = 0.0
     pv_kw: float = 0.0
     pv_curtail_pct: float = 0.0
     cb_closed: bool = True
     sw_closed: bool = True
     tie_closed: bool = False
+    cb2_closed: bool = True
     protection_tripped: bool = False
+    protection2_tripped: bool = False
     fault_present: bool = False
     fault_section: Optional[str] = None
-    fault_indicators: list[bool] = field(default_factory=lambda: [False, False, False])
-    supplied: dict[str, bool] = field(default_factory=lambda: {"b1": True, "b2": True, "b3": True})
+    fault_sections: list[str] = field(default_factory=list)
+    fault_indicators: list[bool] = field(default_factory=lambda: [False] * 5)
+    supplied: dict[str, bool] = field(default_factory=lambda: {b: True for b in ("b1", "b2", "b3", "b4", "b5")})
     customers_off: int = 0
     cml: float = 0.0
     close_onto_fault_count: int = 0
@@ -86,6 +95,7 @@ class GridTelemetry:
     switching_program: Optional[str] = None
     sp_covers: list[str] = field(default_factory=list)
     permit_to_work: Optional[str] = None
+    permits: list[str] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return asdict(self)

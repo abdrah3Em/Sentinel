@@ -10,8 +10,9 @@ NARRATIVES: dict[str, dict[str, str]] = {
     "STATE-001": {
         "summary": "Breaker close onto an uncleared fault",
         "equipment": "CB-101 / faulted section / Hospital bus B3",
-        "why": "Protection tripped for a fault that is still on the section; closing now drives "
-               "{fault_ka:.1f} kA into it — switchgear damage, a re-trip, and a hazard to anyone on the section.",
+        "why": "Protection tripped for a fault that is still on the section; closing now drives the source's "
+               "fault current (up to {fault_ka:.1f} kA) into it — switchgear damage, a re-trip, and a hazard to "
+               "anyone on the section.",
         "recommendation": "Confirm the crew has cleared the fault, reset protection, then close under a "
                           "switching instruction; if nobody issued this close, treat the source as compromised.",
     },

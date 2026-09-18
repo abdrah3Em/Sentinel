@@ -613,3 +613,4 @@ body.ready .scale i { transition: width 0.4s var(--ease), background-color var(-
 .director-log li { display: grid; grid-template-columns: auto auto 1fr; gap: 10px; align-items: start; font-size: var(--text-body-sm); }
 .director-log .t { font-family: var(--font-geist-mono); font-size: var(--text-caption); color: var(--muted); }
 #director-toggle.on { border-color: var(--orange); color: var(--orange); }
+.mimic .gv.left { text-anchor: start; }

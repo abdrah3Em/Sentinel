@@ -16,21 +16,22 @@ from .rules import (RuleContext, W, _contains_subsequence, rule_command_replay, 
 ACTUATOR_ACTIONS = SWITCHING_ACTIONS | TAP_ACTIONS | {"protection_reset"}
 CONSEQUENTIAL = SWITCHING_ACTIONS | TAP_ACTIONS | {"avc_target", "pv_curtail"}
 PROGRAM_EXPECTED = SWITCHING_ACTIONS | {"protection_reset", "ptw_issue", "ptw_cancel", "pv_curtail"}
-CLOSES = {"cb_close": "cb", "sw_close": "sw", "tie_close": "tie"}
+CLOSES = {"cb_close": "cb", "sw_close": "sw", "tie_close": "tie", "cb2_close": "cb2"}
 VMIN, VMAX = config.GRID_V_MIN_KV, config.GRID_V_MAX_KV
 
 
 # ---------------------------------------------------------------------------
 # helpers
 # ---------------------------------------------------------------------------
-def _switches(ctx: RuleContext) -> tuple[bool, bool, bool]:
+def _switches(ctx: RuleContext) -> tuple[bool, bool, bool, bool]:
     t = ctx.t
-    return bool(t.cb_closed), bool(t.sw_closed), bool(t.tie_closed)
+    return bool(t.cb_closed), bool(t.sw_closed), bool(t.tie_closed), bool(getattr(t, "cb2_closed", True))
 
 
 def _before_after(ctx: RuleContext) -> tuple[dict, dict]:
-    before = topology(*_switches(ctx))
-    after = topology(*switches_after(*_switches(ctx), ctx.command.action))
+    cb, sw, tie, cb2 = _switches(ctx)
+    before = topology(cb, sw, tie, cb2)
+    after = topology(*switches_after(cb, sw, tie, ctx.command.action, cb2))
     return before, after
 
 
@@ -53,13 +54,21 @@ def _not_in_program(rule: str, ctx: RuleContext) -> list[Finding]:
                     "No switching program declared", "Switching program")]
 
 
-def _energises_permitted_section(ctx: RuleContext) -> bool:
+def _permits(t) -> list[str]:
+    return list(getattr(t, "permits", None) or ([t.permit_to_work] if t.permit_to_work else []))
+
+
+def _energised_permitted_sections(ctx: RuleContext) -> list[str]:
+    """Sections under permit that this close would energise."""
     t = ctx.t
-    if not t or not t.permit_to_work or ctx.command is None or ctx.command.action not in CLOSES:
-        return False
+    if not t or ctx.command is None or ctx.command.action not in CLOSES:
+        return []
     before, after = _before_after(ctx)
-    section = t.permit_to_work
-    return bool(after["sections"].get(section)) and not before["sections"].get(section)
+    return [s for s in _permits(t) if after["sections"].get(s) and not before["sections"].get(s)]
+
+
+def _energises_permitted_section(ctx: RuleContext) -> bool:
+    return bool(_energised_permitted_sections(ctx))
 
 
 # ---------------------------------------------------------------------------
@@ -67,20 +76,24 @@ def _energises_permitted_section(ctx: RuleContext) -> bool:
 # ---------------------------------------------------------------------------
 def rule_close_onto_fault(ctx: RuleContext) -> list[Finding]:
     """STATE-001 — the flagship: a perfectly ordinary close, onto a fault that has not been cleared."""
-    if not ctx.command or ctx.command.action != "cb_close" or not ctx.t:
+    if not ctx.command or ctx.command.action not in ("cb_close", "cb2_close") or not ctx.t:
         return []
     t = ctx.t
+    device = _device(ctx.command.action)
+    source = "t1" if ctx.command.action == "cb_close" else "f2"
     _, after = _before_after(ctx)
     findings: list[Finding] = []
-    if t.fault_present and t.fault_section and after["t1"].get(t.fault_section):
-        idx = SECTIONS.index(t.fault_section) + 1
-        findings.append(Finding("STATE-001", "state", W["FAULT_PRESENT"],
-                                f"FI-{idx} set on {t.fault_section} — fault not cleared",
-                                f"CB-101 / Section {t.fault_section}"))
-    if t.protection_tripped:
-        age = f"{t.trip_age_s:.0f} s ago" if t.trip_age_s is not None else "earlier"
+    faults = list(getattr(t, "fault_sections", None) or ([t.fault_section] if t.fault_section else []))
+    for section in faults:
+        if after[source].get(section):
+            idx = SECTIONS.index(section) + 1
+            findings.append(Finding("STATE-001", "state", W["FAULT_PRESENT"],
+                                    f"FI-{idx} set on {section} — fault not cleared", f"{device} / Section {section}"))
+    tripped = t.protection_tripped if source == "t1" else getattr(t, "protection2_tripped", False)
+    if tripped:
+        age = f"{t.trip_age_s:.0f} s ago" if t.trip_age_s is not None and source == "t1" else "earlier"
         findings.append(Finding("STATE-001", "state", W["PROTECTION_TRIPPED"],
-                                f"Protection tripped {age}, not reset", "CB-101 relay"))
+                                f"Protection tripped {age}, not reset", f"{device} relay"))
     if not findings:
         return []
     if after["sections"]["S3"] and not t.supplied.get("b3", False):
@@ -91,24 +104,27 @@ def rule_close_onto_fault(ctx: RuleContext) -> list[Finding]:
 
 def rule_open_under_load(ctx: RuleContext) -> list[Finding]:
     """STATE-002 — open the feeder breaker with load on it and nowhere else for it to go."""
-    if not ctx.command or ctx.command.action != "cb_open" or not ctx.t or not ctx.t.cb_closed:
+    if not ctx.command or ctx.command.action not in ("cb_open", "cb2_open") or not ctx.t:
         return []
     t = ctx.t
+    device = _device(ctx.command.action)
+    if not (t.cb_closed if device == "CB-101" else getattr(t, "cb2_closed", True)):
+        return []
     before, after = _before_after(ctx)
     lost = _lost_buses(before, after)
-    loaded = t.i_feeder_a > config.GRID_LOADED_A
+    loaded = (t.i_feeder_a if device == "CB-101" else getattr(t, "i_f2_a", 0.0)) > config.GRID_LOADED_A
     if not lost and not loaded:
         return []
     findings: list[Finding] = []
     if lost:
         findings.append(Finding("STATE-002", "state", W["LOSS_OF_SUPPLY"],
-                                f"Drops {_names(lost)} — no alternate path", "CB-101"))
+                                f"Drops {_names(lost)} — no alternate path", device))
         if "b3" in lost:
             findings.append(Finding("STATE-002", "state", W["CRITICAL_LOAD"],
                                     "Hospital bus B3 loses supply", BUS_NAME["b3"]))
     if loaded:
-        findings.append(Finding("STATE-002", "state", W["BREAKER_LOADED"],
-                                f"Carrying {t.i_feeder_a:.0f} A", "CB-101"))
+        amps = t.i_feeder_a if device == "CB-101" else getattr(t, "i_f2_a", 0.0)
+        findings.append(Finding("STATE-002", "state", W["BREAKER_LOADED"], f"Carrying {amps:.0f} A", device))
     if not lost:
         findings.append(Finding("CTX-003", "context", W["ALTERNATE_PATH"],
                                 "TS-201 closed — load transfers to F2", "TS-201"))
@@ -129,9 +145,10 @@ def rule_parallel(ctx: RuleContext) -> list[Finding]:
 
 def rule_energise_under_permit(ctx: RuleContext) -> list[Finding]:
     """STATE-004 — energising a section a crew is working on.  A program never excuses this."""
-    if not _energises_permitted_section(ctx):
+    sections = _energised_permitted_sections(ctx)
+    if not sections:
         return []
-    section = ctx.t.permit_to_work
+    section = ", ".join(sections)
     return [Finding("STATE-004", "state", W["PTW_ENERGISE"],
                     f"Energises {section} under permit-to-work", f"Section {section}"),
             Finding("STATE-004", "state", W["PTW_CREW"],
@@ -304,7 +321,7 @@ def rule_rapid_switching(ctx: RuleContext) -> list[Finding]:
                                 f"{len(burst)} in the last {config.BURST_WINDOW_S:.0f} s", "Control room"))
     actions = [c.action for c in recent]
     for a, b, device in (("cb_open", "cb_close", "CB-101"), ("sw_open", "sw_close", "SW-102"),
-                         ("tie_open", "tie_close", "TS-201")):
+                         ("tie_open", "tie_close", "TS-201"), ("cb2_open", "cb2_close", "CB-201")):
         if a in actions and b in actions:
             findings.append(Finding("SEQ-003", "sequence", W["BREAKER_PUMPING"],
                                     f"{a} and {b} within {config.RAPID_WINDOW_S:.0f} s — {device} pumped", device))

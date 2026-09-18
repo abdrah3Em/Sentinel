@@ -114,3 +114,20 @@ def test_program_coverage_only_excuses_named_equipment():
     uncovered = rig.send("cb_open")
     assert uncovered is not None and uncovered.rule == "STATE-002"
     assert config.SEVERITY_ORDER[uncovered.level] >= config.SEVERITY_ORDER["HIGH"]
+
+
+def test_energising_any_of_several_permitted_sections_is_high():
+    rig = Rig()
+    rig.send("switching_program_on", "SP-7:CB-101,SW-102,S2,S3", settle=2)
+    rig.send("sw_open", settle=3)
+    rig.send("ptw_issue", "S2,S3", settle=2)
+    alert = rig.send("sw_close")
+    assert alert is not None and alert.rule == "STATE-004"
+    assert "S2, S3" in " ".join(f["detail"] for f in alert.findings)
+
+
+def test_opening_the_second_feeder_breaker_under_load_is_flagged():
+    rig = Rig()
+    alert = rig.send("cb2_open", source="engineering-laptop")
+    assert alert is not None and alert.rule == "STATE-002"
+    assert "Commercial bus B4" in " ".join(f["detail"] for f in alert.findings)

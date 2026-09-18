@@ -6,7 +6,7 @@
 [![Release](https://img.shields.io/badge/release-v1.0.0--icsc-orange.svg)](https://github.com/DanonymousCoder/Sentinel/releases/tag/v1.0.0-icsc)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-Sentinel watches every switching command and setpoint sent to a simulated distribution feeder — over **Modbus TCP** (the RTU's native protocol, with a passive wire tap) and MQTT — and asks the question the protocol never does: **does this command make physical sense for the network right now?** A `cb_close` is issued fifty times a week. The one sent while a fault is still on the section drives 6.5 kA into it. Sentinel tells the control engineer *what* was commanded, *which equipment* it touches, *why* it is dangerous, *how sure* it is, and *what to verify* — and never operates the network itself.
+Sentinel watches every switching command and setpoint sent to a simulated distribution feeder — over **Modbus TCP** (the RTU's native protocol, with a passive wire tap) and MQTT — and asks the question the protocol never does: **does this command make physical sense for the network right now?** A `cb_close` is issued fifty times a week. The one sent while a fault is still on the section drives kilo-amps of fault current into it. Sentinel tells the control engineer *what* was commanded, *which equipment* it touches, *why* it is dangerous, *how sure* it is, and *what to verify* — and never operates the network itself.
 
 ![Grid console during the close-onto-fault attack](docs/img/ui-grid-overview.png)
 
@@ -33,9 +33,9 @@ One 11 kV radial feeder F1: a 33/11 kV transformer with an on-load tap changer u
 ## Results
 
 <!-- metrics:start -->
-- **125 tests pass** (3 skipped without a broker).
+- **131 tests pass** (3 skipped without a broker).
 - **11/11 attack scenarios** detected at their required level; **0 false positives** above LOW across 8 legitimate scenarios.
-- Flagship close-onto-fault: **CRITICAL · score 95**, raised the moment the command arrives (evaluation p95 **1.99 ms**).
+- Flagship close-onto-fault: **CRITICAL · score 95**, raised the moment the command arrives (evaluation p95 **0.81 ms**).
 - Full tables: [docs/RESULTS.md](docs/RESULTS.md).
 <!-- metrics:end -->
 

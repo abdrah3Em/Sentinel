@@ -46,7 +46,7 @@ register(Scenario(
         _n("CB-101 tripped, FI-2 set, hospital dark — protection doing its job.", 3.0),
         _n("A valid cb_close arrives from an engineering laptop. Fault not cleared.", 4.0),
         _c("cb_close", source=ATTACKER, note="Attack: cb_close onto the fault", delay=1.0),
-        _n("6.5 kA for 150 ms, re-trip, stress counter up.", 5.0),
+        _n("Fault current for 150 ms, re-trip, stress counter up.", 5.0),
         _sim("fault_clear", True, "Crew clears the fault on S2", 6.0),
         _c("protection_reset", note="Operator resets protection", delay=3.0),
         _c("cb_close", note="Operator restores supply", delay=3.0),

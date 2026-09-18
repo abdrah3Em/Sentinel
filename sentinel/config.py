@@ -181,9 +181,13 @@ GRID_MANUAL_OVERRIDE_S = 60.0          # a manual tap command holds the AVC off 
 GRID_V_MIN_KV, GRID_V_MAX_KV = 10.34, 11.66          # statutory ±6 %
 GRID_V_WARN_LOW_KV, GRID_V_WARN_HIGH_KV = 10.5, 11.5
 GRID_I_RATING_A, GRID_I_WARN_A = 400.0, 360.0
-GRID_SECTIONS = {"S1": (0.40, 0.60), "S2": (0.60, 0.90), "S3": (0.40, 0.60)}   # R, X in ohms
-GRID_LOADS_KW = {"b1": 1800.0, "b2": 2400.0, "b3": 900.0}
-GRID_CUSTOMERS = {"b1": 1800, "b2": 45, "b3": 1}
+# Feeder F1: BB-101 -S1- B1 -[SW-102]- S2 - B2 -S3- B3 -[TS-201]- B4 -S4- BB-201 (feeder F2), B4 -S5- B5
+GRID_SECTIONS = {"S1": (0.40, 0.60), "S2": (0.60, 0.90), "S3": (0.40, 0.60),      # R, X in ohms
+                 "S4": (0.50, 0.75), "S5": (0.45, 0.65), "TIE": (0.05, 0.08)}
+GRID_LOADS_KW = {"b1": 1800.0, "b2": 2400.0, "b3": 900.0, "b4": 2000.0, "b5": 1200.0}
+GRID_CUSTOMERS = {"b1": 1800, "b2": 45, "b3": 1, "b4": 30, "b5": 950}
+GRID_SOURCE_Z_OHM = 0.977              # 33/11 kV source impedance seen at the busbar (6.5 kA bolted fault)
+GRID_POWER_FLOW_SWEEPS = 4             # forward-backward sweep iterations per step
 GRID_CRITICAL_BUS = "b3"               # the hospital
 GRID_LOAD_PF = 0.95
 GRID_PV_RATED_KW = 2000.0

@@ -39,7 +39,7 @@ def test_planned_switching_program_stays_at_low_or_below():
     for action in ("cb_close", "sw_close", "tie_open", "switching_program_off"):
         rig.send(action, settle=4)
     assert worst_rank(rig) <= LOW, [(a.level, a.rule, a.score) for a in rig.guard.alerts]
-    assert rig.plant.supplied == {"b1": True, "b2": True, "b3": True}
+    assert all(rig.plant.supplied[b] for b in ("b1", "b2", "b3"))
 
 
 def test_fault_locate_clear_restore_is_quiet():

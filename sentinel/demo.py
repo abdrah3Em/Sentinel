@@ -87,7 +87,7 @@ def run_headless() -> Script:
             all(k in details for k in ("FI-2", "S2", "Hospital", ATTACKER)))
     rig.advance(1)
     t = rig.plant.telemetry()
-    s.check(rig.now, "Physical consequence", "6.5 kA flash, re-trip, close-onto-fault count 1",
+    s.check(rig.now, "Physical consequence", "fault-current flash, re-trip, close-onto-fault count 1",
             t.close_onto_fault_count == 1 and not t.cb_closed, f"count={t.close_onto_fault_count} cb_closed={t.cb_closed}")
 
     # 4. Context: the same command after the crew clears the fault and protection is reset.

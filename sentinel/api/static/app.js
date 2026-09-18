@@ -283,9 +283,17 @@ const tankDomain = {
 /* ---------------------------------------------------------------- domain: distribution feeder */
 const GRID = { vmin: 10.34, vmax: 11.66, vwarnLo: 10.5, vwarnHi: 11.5, rating: 400, warn: 360 };
 let lastCloseOntoFault = null;
-function topo(cb, sw, tie) {
-  const t1 = { S1: cb, S2: cb && sw, S3: cb && sw }, f2 = { S1: tie && sw, S2: tie, S3: tie };
-  return { S1: t1.S1 || f2.S1, S2: t1.S2 || f2.S2, S3: t1.S3 || f2.S3, parallel: cb && sw && tie };
+const BRANCHES = { S1: ['bb1', 'b1', 'cb'], S2: ['b1', 'b2', 'sw'], S3: ['b2', 'b3', null], TIE: ['b3', 'b4', 'tie'], S4: ['bb2', 'b4', 'cb2'], S5: ['b4', 'b5', null] };
+function reach(root, sw) {
+  const seen = new Set([root]); const q = [root];
+  while (q.length) { const n = q.shift(); for (const [name, [a, b, s]] of Object.entries(BRANCHES)) { if (s && !sw[s]) continue; const o = a === n ? b : b === n ? a : null; if (o && !seen.has(o)) { seen.add(o); q.push(o); } } }
+  return seen;
+}
+function topo(cb, sw, tie, cb2 = true) {
+  const S = { cb, sw, tie, cb2 }, r1 = reach('bb1', S), r2 = reach('bb2', S), out = { t1: {}, f2: {} };
+  for (const [name, [a, b, s]] of Object.entries(BRANCHES)) { if (name === 'TIE') continue; const live = !s || S[s]; out.t1[name] = live && r1.has(a) && r1.has(b); out.f2[name] = live && r2.has(a) && r2.has(b); out[name] = out.t1[name] || out.f2[name]; }
+  out.parallel = cb && cb2 && [...r1].some((n) => n !== 'bb1' && n !== 'bb2' && r2.has(n));
+  return out;
 }
 const vBand = (v) => (v > GRID.vmax || v < GRID.vmin ? 'out' : v > GRID.vwarnHi || v < GRID.vwarnLo ? 'near' : 'ok');
 const gridDomain = {
@@ -301,27 +309,33 @@ const gridDomain = {
     return ['plain', '—', false];
   },
   equip(key, t) {
-    const par = t.cb_closed && t.sw_closed && t.tie_closed;
+    const par = topo(t.cb_closed, t.sw_closed, t.tie_closed, t.cb2_closed).parallel;
     switch (key) {
       case 'cb': return t.protection_tripped ? [t.cb_closed ? 'Closed · latch set' : 'Tripped', 'bad'] : [t.cb_closed ? 'Closed' : 'Open', t.cb_closed ? 'on' : 'off'];
+      case 'cb2': return t.protection2_tripped ? [t.cb2_closed ? 'Closed · latch set' : 'Tripped', 'bad'] : [t.cb2_closed ? 'Closed' : 'Open', t.cb2_closed ? 'on' : 'off'];
       case 'sw': return [t.sw_closed ? 'Closed' : 'Open', t.sw_closed ? 'on' : 'off'];
       case 'tie': return t.tie_closed ? [par ? 'Closed · parallel' : 'Closed · transfer', par ? 'warn' : 'on'] : ['Open · normal', 'off'];
       case 'pv': return t.supplied?.b2 ? [`${num(t.pv_kw / 1000, 2)} MW${t.pv_curtail_pct ? ` · ${num(t.pv_curtail_pct, 0)} % curtailed` : ''}`, 'on'] : ['Tripped · bus dead', 'bad'];
-      case 'sp': return t.switching_program ? [t.switching_program + (t.sp_covers?.length && t.sp_covers.length < 6 ? ` · ${t.sp_covers.length} items` : '') + (t.permit_to_work ? ` · PTW ${t.permit_to_work}` : ''), 'on']
-        : t.permit_to_work ? [`PTW ${t.permit_to_work} · no program`, 'warn'] : ['None', 'off'];
+      case 'sp': { const ptw = (t.permits && t.permits.length) ? t.permits.join(',') : t.permit_to_work; return t.switching_program ? [t.switching_program + (t.sp_covers?.length && t.sp_covers.length < 9 ? ` · ${t.sp_covers.length} items` : '') + (ptw ? ` · PTW ${ptw}` : ''), 'on']
+        : ptw ? [`PTW ${ptw} · no program`, 'warn'] : ['None', 'off']; }
     }
     return ['—', 'off'];
   },
   mimic(t) {
-    const tp = topo(t.cb_closed, t.sw_closed, t.tie_closed);
-    const live = (id, on) => { const el = $(id); el.classList.toggle('dead', !on); };
+    const cb2 = t.cb2_closed !== false, tp = topo(t.cb_closed, t.sw_closed, t.tie_closed, cb2);
+    const live = (id, on) => { const el = $(id); if (el) el.classList.toggle('dead', !on); };
     live('g-l0', t.cb_closed); live('g-s1', tp.S1); live('g-l1', tp.S1); live('g-s2', tp.S2); live('g-s3', tp.S3); live('g-l3', tp.S3);
-    $('g-f1').classList.toggle('active', tp.S1 && !!t.cb_closed); $('g-f2').classList.toggle('active', tp.S2); $('g-f3').classList.toggle('active', tp.S3);
+    live('g-l4', tp.S4 || tp.S3); live('g-s4', tp.S4); live('g-l5', cb2); live('g-s5', tp.S5);
+    const flows = { 'g-f1': tp.S1, 'g-f2': tp.S2, 'g-f3': tp.S3, 'g-f4': tp.S4, 'g-f5': tp.S5, 'g-ft': t.tie_closed && (tp.S3 || tp.S4) && !tp.parallel };
+    for (const [id, on] of Object.entries(flows)) $(id).classList.toggle('active', !!on);
     const sw = (id, closed, tripped) => ($(id).setAttribute('class', 'sw ' + (tripped ? 'tripped' : closed ? 'closed' : 'open')));
-    sw('g-cb', t.cb_closed, t.protection_tripped && !t.cb_closed); sw('g-sw', t.sw_closed, false); sw('g-tie', t.tie_closed, false);
-    for (const s of ['S1', 'S2', 'S3']) { $('g-bolt-' + s).classList.toggle('show', t.fault_section === s); $('g-fi-' + s).classList.toggle('set', t.fault_section === s); }
-    const fromF2 = { S1: !t.cb_closed && t.tie_closed && t.sw_closed, S2: !(t.cb_closed && t.sw_closed) && t.tie_closed, S3: !(t.cb_closed && t.sw_closed) && t.tie_closed };
-    [['g-f1', 'S1'], ['g-f2', 'S2'], ['g-f3', 'S3']].forEach(([id, s]) => $(id).classList.toggle('rev', !!fromF2[s]));
+    sw('g-cb', t.cb_closed, t.protection_tripped && !t.cb_closed); sw('g-sw', t.sw_closed, false); sw('g-tie', t.tie_closed, false); sw('g-cb2', cb2, t.protection2_tripped && !cb2);
+    const faults = t.fault_sections || (t.fault_section ? [t.fault_section] : []);
+    for (const s of ['S1', 'S2', 'S3', 'S4', 'S5']) { $('g-bolt-' + s).classList.toggle('show', faults.includes(s)); $('g-fi-' + s).classList.toggle('set', faults.includes(s)); }
+    // flow direction: dashes run away from the source that feeds each section
+    const fromF2 = { S1: !tp.t1.S1 && tp.f2.S1, S2: !tp.t1.S2 && tp.f2.S2, S3: !tp.t1.S3 && tp.f2.S3, S4: !tp.f2.S4 && tp.t1.S4, S5: !tp.f2.S5 && tp.t1.S5 };
+    [['g-f1', 'S1'], ['g-f2', 'S2'], ['g-f3', 'S3'], ['g-f4', 'S4'], ['g-f5', 'S5']].forEach(([id, s]) => $(id).classList.toggle('rev', !!fromF2[s]));
+    $('g-ft').classList.toggle('rev', !!(tp.t1.S3 && !tp.f2.S4));
     const node = (id, on, v, vid, lid, kw) => {
       const el = $(id); el.classList.toggle('dead', !on); el.classList.toggle('out', on && vBand(v) === 'out');
       $(vid).textContent = on ? num(v, 2) + ' kV' : 'DEAD'; $(lid).textContent = on ? `${num(kw / 1000, 2)} MW` : '0 MW';
@@ -329,27 +343,31 @@ const gridDomain = {
     node('g-b1', t.supplied?.b1, t.v_b1_kv, 'g-vb1', 'g-lb1', t.load_b1_kw);
     node('g-b2', t.supplied?.b2, t.v_b2_kv, 'g-vb2', 'g-lb2', t.load_b2_kw);
     node('g-b3', t.supplied?.b3, t.v_b3_kv, 'g-vb3', 'g-lb3', t.load_b3_kw);
-    $('g-vbus').textContent = num(t.v_bus_kv, 2) + ' kV';
+    node('g-b4', t.supplied?.b4, t.v_b4_kv, 'g-vb4', 'g-lb4', t.load_b4_kw);
+    node('g-b5', t.supplied?.b5, t.v_b5_kv, 'g-vb5', 'g-lb5', t.load_b5_kw);
+    $('g-vbus').textContent = num(t.v_bus_kv, 2) + ' kV'; $('g-vbus2').textContent = num(t.v_bus2_kv, 2) + ' kV';
     $('g-tap').textContent = `TAP ${signed(t.tap)}`;
     $('g-pv').classList.toggle('off', !t.supplied?.b2 || t.pv_kw <= 0);
     $('g-pvkw').textContent = t.supplied?.b2 ? `PV ${num(t.pv_kw / 1000, 2)} MW${t.pv_curtail_pct ? ` · ${num(t.pv_curtail_pct, 0)} % curt.` : ''}` : 'PV tripped';
     const stats = $('g-stats');
-    stats.textContent = `Customers off ${t.customers_off ?? 0} · CML ${num(t.cml, 1)} · close-onto-fault ${t.close_onto_fault_count ?? 0} · stress ${num(t.switchgear_stress, 0)} %${tp.parallel ? ` · parallel ${num(t.parallel_s, 0)} s · ${num(t.circulating_a, 0)} A circulating` : ''}`;
+    stats.textContent = `Customers off ${t.customers_off ?? 0} · CML ${num(t.cml, 1)} · close-onto-fault ${t.close_onto_fault_count ?? 0} · stress ${num(t.switchgear_stress, 0)} % · F2 ${num(t.i_f2_a, 0)} A${tp.parallel ? ` · parallel ${num(t.parallel_s, 0)} s · ${num(t.circulating_a, 0)} A circulating` : ''}`;
     stats.setAttribute('class', 'stat left' + (t.customers_off > 0 || t.fault_current_ka ? ' bad' : ''));
-    $('g-ctx').textContent = `AVC ${t.avc_mode} ${num(t.avc_target_kv, 2)} kV · program ${t.switching_program ? t.switching_program + ' (' + (t.sp_covers || []).join(', ') + ')' : '—'} · permit ${t.permit_to_work || '—'} · protection ${t.protection_tripped ? 'TRIPPED' : 'reset'}`;
+    const permits = (t.permits && t.permits.length) ? t.permits.join(', ') : (t.permit_to_work || '—');
+    $('g-ctx').textContent = `AVC ${t.avc_mode} ${num(t.avc_target_kv, 2)} kV · program ${t.switching_program ? t.switching_program + ' (' + (t.sp_covers || []).join(', ') + ')' : '—'} · permits ${permits} · protection ${t.protection_tripped || t.protection2_tripped ? 'TRIPPED' : 'reset'}`;
     if (lastCloseOntoFault !== null && t.close_onto_fault_count > lastCloseOntoFault) {
-      const f = $('g-flash'); f.classList.remove('show'); void f.getBoundingClientRect(); f.classList.add('show');
+      const f = $(t.protection2_tripped && !t.protection_tripped ? 'g-flash2' : 'g-flash'); f.classList.remove('show'); void f.getBoundingClientRect(); f.classList.add('show');
     }
     lastCloseOntoFault = t.close_onto_fault_count ?? 0;
   },
   note(t) {
-    const tp = topo(t.cb_closed, t.sw_closed, t.tie_closed);
-    if (t.fault_current_ka) return ['bad', `Closed onto fault ${t.fault_section} · ${num(t.fault_current_ka, 1)} kA · re-tripping`];
-    if (t.fault_present && t.protection_tripped) return ['bad', `Tripped · fault on ${t.fault_section} not cleared · ${t.customers_off} customers off`];
-    if (t.customers_off > 0) return ['bad', `${['b1', 'b2', 'b3'].filter((b) => !t.supplied?.[b]).map((b) => b.toUpperCase()).join(', ')} dead · ${t.customers_off} customers off · CML ${num(t.cml, 1)}`];
+    const tp = topo(t.cb_closed, t.sw_closed, t.tie_closed, t.cb2_closed !== false);
+    const faults = (t.fault_sections && t.fault_sections.length) ? t.fault_sections.join(', ') : t.fault_section;
+    if (t.fault_current_ka) return ['bad', `Closed onto fault ${faults} · ${num(t.fault_current_ka, 1)} kA · re-tripping`];
+    if (t.fault_present && (t.protection_tripped || t.protection2_tripped)) return ['bad', `Tripped · fault on ${faults} not cleared · ${t.customers_off} customers off`];
+    if (t.customers_off > 0) return ['bad', `${['b1', 'b2', 'b3', 'b4', 'b5'].filter((b) => !t.supplied?.[b]).map((b) => b.toUpperCase()).join(', ')} dead · ${t.customers_off} customers off · CML ${num(t.cml, 1)}`];
     if (vBand(t.v_bus_kv) === 'out') return ['bad', `Busbar ${num(t.v_bus_kv, 2)} kV outside ${GRID.vmin}–${GRID.vmax} kV · tap ${signed(t.tap)}`];
     if (tp.parallel) return ['', `Paralleled with F2 · ${num(t.parallel_s, 0)} s · ${num(t.circulating_a, 0)} A circulating`];
-    if (t.fault_present) return ['', `Fault indicator set on ${t.fault_section} · latch ${t.protection_tripped ? 'set' : 'reset'}`];
+    if (t.fault_present) return ['', `Fault indicator set on ${faults} · latch ${t.protection_tripped ? 'set' : 'reset'}`];
     return ['', `Nominal · ${num(t.i_feeder_a, 0)} A · ${num(t.v_bus_kv, 2)} kV · tap ${signed(t.tap)} · PV ${num(t.pv_kw / 1000, 1)} MW`];
   },
 };
@@ -421,6 +439,7 @@ function stateRows(s) {
     if (f.kind === 'num') out = num(v, f.dp) + (f.unit || '');
     else if (f.kind === 'bool') out = v ? f.on : f.off;
     else if (f.kind === 'tap') out = `${signed(s.tap)} / ${num(s.avc_target_kv, 2)} kV`;
+    else if (f.kind === 'list') out = Array.isArray(v) && v.length ? v.join(', ') : (f.empty || '—');
     else out = v === null || v === undefined || v === '' ? (f.empty || '—') : (f.title ? title(String(v)) : String(v));
     return [label, out];
   });

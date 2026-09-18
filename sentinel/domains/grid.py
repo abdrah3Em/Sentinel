@@ -63,7 +63,7 @@ def physics_residual(t: Telemetry) -> tuple[float, float]:
 def mode_payload(snapshot: dict[str, Any]) -> dict[str, Any]:
     return {"avc_mode": snapshot["avc_mode"], "avc_target_kv": snapshot["avc_target_kv"],
             "switching_program": snapshot["switching_program"], "sp_covers": snapshot.get("sp_covers", []),
-            "permit_to_work": snapshot["permit_to_work"]}
+            "permit_to_work": snapshot["permit_to_work"], "permits": snapshot.get("permits", [])}
 
 
 def descriptor() -> dict[str, Any]:
@@ -86,6 +86,7 @@ def descriptor() -> dict[str, Any]:
             {"key": "sw", "label": "Sectionaliser SW-102", "icon": "switch"},
             {"key": "tie", "label": "Tie TS-201", "icon": "switch"},
             {"key": "pv", "label": "PV plant PV-1", "icon": "sun"},
+            {"key": "cb2", "label": "Breaker CB-201 (F2)", "icon": "breaker"},
             {"key": "sp", "label": "Switching program", "icon": "mode"},
         ],
         "trend": {
@@ -110,7 +111,8 @@ def descriptor() -> dict[str, Any]:
             ["CB-101", "cb_closed", {"kind": "bool", "on": "Closed", "off": "Open"}],
             ["TS-201", "tie_closed", {"kind": "bool", "on": "Closed", "off": "Open"}],
             ["Protection", "protection_tripped", {"kind": "bool", "on": "Tripped", "off": "Reset"}],
-            ["Fault", "fault_section", {"kind": "text", "empty": "none"}],
+            ["Faults", "fault_sections", {"kind": "list", "empty": "none"}],
+            ["Permits", "permits", {"kind": "list", "empty": "none"}],
             ["Program", "switching_program", {"kind": "text", "empty": "none"}],
         ],
         "console": {
