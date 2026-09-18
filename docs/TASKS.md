@@ -6,13 +6,13 @@ Baseline (harden/energy-first, Phase 0): **101 passed, 5 skipped** (integration 
 - [x] N1 Every surface is energy: grid leads README, first screenshot, quickstart, demo
 - [x] N2 Legacy profile deleted; crude oil pipeline pump station profile replaces it (zero legacy vocabulary outside git history)
 - [x] N3 Decisions recorded in docs/DECISIONS.md as they are made
-- [ ] N4 Everything committed
+- [x] N4 Everything committed
 
 ## Checklist A — judge-facing
 - [x] A1 Energy-first README (first 60 lines grid-only)
 - [x] A2 docs/DEMO.md + `make demo` asserting every verdict + 30-second fallback
 - [x] A3 `make metrics` generates README numbers between markers; CI fails on drift
-- [ ] A4 Atomic commit history; tag v1.0.0-icsc; README shows the tag
+- [x] A4 Atomic commit history; tag v1.0.0-icsc; README shows the tag
 - [ ] A5 Docker path proven from a fresh clone with healthchecks — compose/Dockerfile complete with healthchecks, digests, shared volume; the run itself is not provable on this machine (no Docker), see DECISIONS D8
 - [x] A6 Zero network at runtime: self-hosted woff2 fonts, no CDN, CSP, verified with outbound blocked (scripts/verify_offline.sh)
 - [x] A7 Auth on every mutating endpoint (token generated at first run) + docs/THREAT-MODEL.md
@@ -28,22 +28,22 @@ Baseline (harden/energy-first, Phase 0): **101 passed, 5 skipped** (integration 
 - [x] B5 Real grid physics: forward-backward sweep power flow, two feeders + tie, per-section permits, concurrent faults, hand-computed validation test
 - [x] B6 SQLite persistence for guard state + restart test
 - [x] B7 Narration off the operator timeline: director panel, OFF in judge mode
-- [ ] B8 Light/dark × desktop/phone parity, screenshots committed
+- [x] B8 Light/dark × desktop/phone parity, screenshots committed (docs/img/ui-grid-overview*.png)
 - [x] B9 Pinned requirements with hashes, lock file, base image by digest; fresh venv proven, docker build not runnable here (D8)
 
 ## Verification matrix (every iteration)
 | ID | Check | Status |
 |---|---|---|
-| V1 | Full test suite green, count ≥ baseline | |
-| V2 | `make demo` passes end to end | |
-| V3 | Fresh clone, `docker compose up`, console reachable, scenario runs, teardown clean | |
-| V4 | Fresh venv from pinned requirements installs and runs | |
-| V5 | Console loads with outbound network blocked | |
-| V6 | Unauthenticated mutating request rejected; authenticated succeeds | |
-| V7 | Replay rejected; spoofed source rejected | |
-| V8 | Restart preserves state | |
-| V9 | Legacy-domain vocabulary grep (scripts/check_vocab.sh): zero hits outside git history | |
-| V10 | README first 60 lines grid-only | |
-| V11 | `make metrics` output matches committed README and RESULTS.md | |
-| V12 | Light + dark × desktop + phone render cleanly | |
-| V13 | Hostile fresh-clone walkthrough surfaced no new issues | |
+| V1 | Full test suite green, count ≥ baseline | PASS — 135 passed (baseline 101) |
+| V2 | `make demo` passes end to end | PASS — headless and `--live` |
+| V3 | Fresh clone, `docker compose up`, console reachable, scenario runs, teardown clean | NOT PROVABLE HERE — no Docker on the build machine (DECISIONS D8); compose parses, digests and hashes pinned, healthcheck commands run by hand |
+| V4 | Fresh venv from pinned requirements installs and runs | PASS — `pip install --require-hashes`, demo and suite in the venv |
+| V5 | Console loads with outbound network blocked | PASS — scripts/verify_offline.sh |
+| V6 | Unauthenticated mutating request rejected; authenticated succeeds | PASS — 401 / 200, tests/test_console.py |
+| V7 | Replay rejected; spoofed source rejected | PASS — tests/test_signing.py |
+| V8 | Restart preserves state | PASS — tests/test_persistence.py |
+| V9 | Legacy-domain vocabulary grep (scripts/check_vocab.sh): zero hits outside git history | PASS |
+| V10 | README first 60 lines grid-only | PASS — scripts/check_readme.sh |
+| V11 | `make metrics` output matches committed README and RESULTS.md | PASS — `make check-metrics` |
+| V12 | Light + dark × desktop + phone render cleanly | PASS — docs/img/ui-grid-overview*.png |
+| V13 | Hostile fresh-clone walkthrough surfaced no new issues | PASS — clone, demo, checks from the clone; no secrets in the tree |
