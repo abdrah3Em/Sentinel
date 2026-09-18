@@ -81,7 +81,7 @@ Register map: `python -m sentinel.plant.modbus --map`.
 make test            # the whole suite (integration tests need a broker on 1883)
 make demo            # the four-minute demo, headless, every verdict asserted
 make metrics         # regenerate docs/RESULTS.md and the README numbers from a real run
-make check-metrics   # what CI runs: fail if the committed numbers drifted
+make check-metrics   # fail if the committed numbers drifted from a fresh run
 ```
 
 `tests/test_grid_acceptance.py` maps one-to-one onto the PRD's acceptance criteria.
