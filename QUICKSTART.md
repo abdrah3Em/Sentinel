@@ -11,7 +11,7 @@ it never operates switchgear. Demo script: [docs/DEMO.md](docs/DEMO.md). Numbers
 ### Option A — Docker (what the judges type)
 
 ```bash
-git clone https://github.com/DanonymousCoder/Sentinel.git && cd Sentinel && docker compose up
+git clone https://github.com/abdrah3Em/Sentinel.git && cd Sentinel && docker compose up
 ```
 
 Broker, feeder simulator (with its Modbus TCP RTU on 5020), guard and console come up
