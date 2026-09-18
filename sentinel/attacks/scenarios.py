@@ -296,9 +296,10 @@ class ScenarioRunner:
         elif step.kind == "command":
             command = Command(action=step.action, source=step.source, value=step.value)
             self._narrate(step.note, scenario, "STEP")
-            self.bus.publish(config.TOPIC_COMMAND, command.to_dict())
+            envelope = command.to_dict()
+            self.bus.publish(config.TOPIC_COMMAND, envelope)
             if step.remember:
-                self.remembered[step.remember] = command.to_dict()
+                self.remembered[step.remember] = envelope
             log.info("scenario %s -> %s (%s)", scenario.id, step.action, step.source)
         elif step.kind == "replay_command":
             captured = self.remembered.get(step.key)

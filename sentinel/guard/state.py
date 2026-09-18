@@ -13,6 +13,7 @@ from typing import Any, Deque, Optional
 
 from .. import config, process
 from ..models import Command, Telemetry
+from ..signing import Verifier
 from .baseline import Baseline
 
 CLEAN_RUN_TO_CLEAR = 20      # consecutive good frames that clear a past regression
@@ -141,6 +142,8 @@ class ProcessState:
     integrity: TelemetryIntegrity = field(default_factory=TelemetryIntegrity)
     history: CommandHistory = field(default_factory=CommandHistory)
     baseline: Baseline = field(default_factory=Baseline)
+    verifier: Verifier = field(default_factory=Verifier)
+    verifications: dict[str, dict[str, Any]] = field(default_factory=dict)
     residual_since: Optional[float] = None
     setpoint_samples: Deque[tuple[int, float]] = field(default_factory=lambda: deque(maxlen=4000))
 

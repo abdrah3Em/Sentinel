@@ -11,7 +11,7 @@ from ..models import Finding
 from ..plant.grid import (BUSES, BUS_NAME, DEVICE, SECTIONS, SWITCHING_ACTIONS, TAP_ACTIONS,
                           bus_voltage, switches_after, topology)
 from .rules import (RuleContext, W, _contains_subsequence, rule_command_replay, rule_learned_baseline,
-                    rule_telemetry_integrity)
+                    rule_signature, rule_telemetry_integrity)
 
 ACTUATOR_ACTIONS = SWITCHING_ACTIONS | TAP_ACTIONS | {"protection_reset"}
 CONSEQUENTIAL = SWITCHING_ACTIONS | TAP_ACTIONS | {"avc_target", "pv_curtail"}
@@ -372,6 +372,8 @@ def rule_source(ctx: RuleContext) -> list[Finding]:
     if not ctx.command:
         return []
     source = ctx.command.source
+    if ctx.verification.get("status") in ("unsigned", "bad"):
+        return []                      # rule_signature already charged for the forged identity
     if source in config.GRID_TRUSTED_SOURCES:
         return []
     if source in config.GRID_PROGRAM_SOURCES:
@@ -414,6 +416,7 @@ COMMAND_RULES = [
     rule_envelope,
     rule_rapid_switching,
     rule_unsafe_pattern,
+    rule_signature,
     rule_source,
     rule_command_replay,
     rule_telemetry_integrity,

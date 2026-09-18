@@ -7,72 +7,72 @@ Publishes  : guard/alert, guard/assessment, guard/status
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
 import time
 
 from .. import config
 from ..bus import Bus
 from ..models import Alert
 from .engine import CommandGuard
+from .store import GuardStore
 
 log = logging.getLogger("sentinel.guard")
 
 
 class GuardService:
-    def __init__(self) -> None:
+    def __init__(self, store_path: str | None = None) -> None:
         self.bus = Bus("guard")
+        self.store = GuardStore(store_path) if store_path else GuardStore()
         self.guard = CommandGuard(on_alert=self._publish_alert,
                                   on_assessment=self._publish_assessment)
         self.running = True
 
     def _publish_alert(self, alert: Alert) -> None:
+        self.store.add_alert(alert.to_dict())
         self.bus.publish(config.TOPIC_ALERT, alert.to_dict())
         log.warning("[%s %3d] %s  (%s)", alert.level, alert.score, alert.summary, alert.rule)
 
     def _publish_assessment(self, assessment: dict) -> None:
+        self.store.add_assessment(assessment)
         self.bus.publish(config.TOPIC_ASSESSMENT, assessment)
+
+    def _on_command(self, topic: str, payload: dict) -> None:
+        self.store.add_command(payload)
+        self.guard.observe_command(payload)
+        self._save()
 
     def _on_control(self, topic: str, payload: dict) -> None:
         if payload.get("reset"):
             self.guard.reset()
-            self._save()
+            self.store.clear()
             log.info("guard state reset")
 
     # ---------------------------------------------------------------- persistence
     def _load(self) -> None:
-        path = config.GUARD_STATE_PATH
-        try:
-            with open(path) as f:
-                data = json.load(f)
-        except (OSError, ValueError):
+        data = self.store.load()
+        if not data.get("saved_at"):
             return
-        age = time.time() - float(data.get("saved_at", 0))
+        age = time.time() - data["saved_at"]
         if age > config.GUARD_STATE_MAX_AGE_S:
-            log.info("guard snapshot is %.0f s old — starting clean", age)
+            log.info("persisted guard state is %.0f s old — starting clean", age)
+            self.store.clear()
             return
         self.guard.restore(data)
-        log.info("guard state restored: %d commands, %d advisories", len(data.get("commands", [])),
-                 len(data.get("alerts", [])))
+        log.info("guard state restored: %d commands, %d advisories, baseline %d sources",
+                 len(data.get("commands", [])), len(data.get("alerts", [])),
+                 len((data.get("baseline") or {}).get("intervals", {})))
 
     def _save(self) -> None:
-        path = config.GUARD_STATE_PATH
         try:
-            os.makedirs(os.path.dirname(path), exist_ok=True)
-            tmp = path + ".tmp"
-            with open(tmp, "w") as f:
-                json.dump(self.guard.snapshot(), f)
-            os.replace(tmp, path)
-        except OSError as e:
+            self.store.save_blobs(self.guard.blobs())
+        except Exception as e:      # noqa: BLE001 — persistence must never take the guard down
             log.warning("could not save guard state: %s", e)
 
     def run(self) -> None:
         self.bus.connect()
         self.bus.subscribe(config.TOPIC_TELEMETRY,
                            lambda topic, payload: self.guard.observe_telemetry(payload))
-        self.bus.subscribe(config.TOPIC_COMMAND,
-                           lambda topic, payload: self.guard.observe_command(payload))
+        self.bus.subscribe(config.TOPIC_COMMAND, self._on_command)
         self.bus.subscribe(config.TOPIC_CONTROL, self._on_control)
         log.info("command guard observing %s and %s", config.TOPIC_TELEMETRY, config.TOPIC_COMMAND)
         self._load()
@@ -83,8 +83,9 @@ class GuardService:
             self.guard.evaluate_process()
             self.bus.publish(config.TOPIC_STATUS, self.guard.status(), retain=True)
             ticks += 1
-            if ticks % 10 == 0:
+            if ticks % 5 == 0:
                 self._save()
+        self._save()
 
 
 def main() -> None:

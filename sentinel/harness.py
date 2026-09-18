@@ -57,16 +57,18 @@ class Rig:
         command.ts = ts if ts is not None else int(self.now * 1000)
         if command_id:
             command.id = command_id
-        self.last_command = command.to_dict()
-        alert = self.guard.observe_command(command.to_dict(), now=self.now)
+        envelope = command.to_dict()                # signed once: the guard sees exactly what was published
+        self.last_command = envelope
+        alert = self.guard.observe_command(envelope, now=self.now)
         self.plant.apply(action, value)
         if settle:
             self.advance(settle)
         return alert
 
-    def replay_command(self, captured: dict, age_s: float):
-        """Re-issue a recorded command verbatim: same id, timestamp from when it was captured."""
-        replayed = dict(captured, ts=captured["ts"] - int(age_s * 1000))
+    def replay_command(self, captured: dict, age_s: float = 0.0):
+        """Re-issue a recorded command.  age_s == 0: byte-for-byte replay (sequence and nonce reuse);
+        age_s > 0: the attacker also rewrites the timestamp to look older/fresher, which breaks the MAC."""
+        replayed = dict(captured) if age_s <= 0 else dict(captured, ts=captured["ts"] - int(age_s * 1000))
         alert = self.guard.observe_command(replayed, now=self.now)
         self.plant.apply(replayed["action"], replayed.get("value"))
         return alert

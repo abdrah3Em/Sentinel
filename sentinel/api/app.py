@@ -259,8 +259,9 @@ def api_command():
         return jsonify({"ok": False, "error": "action required"}), 400
     command = Command(action=action, source=body.get("source", "operator-hmi"),
                       value=body.get("value"))
-    dashboard.bus.publish(config.TOPIC_COMMAND, command.to_dict())
-    return jsonify({"ok": True, "command": command.to_dict()})
+    envelope = command.to_dict()
+    dashboard.bus.publish(config.TOPIC_COMMAND, envelope)
+    return jsonify({"ok": True, "command": envelope})
 
 
 @app.post("/api/reset")

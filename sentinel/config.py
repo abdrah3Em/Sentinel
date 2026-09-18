@@ -47,11 +47,11 @@ TOPIC_SIM = f"{TOPIC_NS}/plant/sim"              # simulator-only hooks (fault i
 # --------------------------------------------------------------------------
 API_HOST = os.environ.get("SENTINEL_API_HOST", "0.0.0.0")
 API_PORT = int(os.environ.get("SENTINEL_API_PORT", CONSOLE_PORTS.get(PROCESS, 8080)))
-GUARD_STATE_PATH = os.environ.get(
-    "SENTINEL_GUARD_STATE",
-    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", f"guard-{PROCESS}.json"),
+GUARD_DB_PATH = os.environ.get(
+    "SENTINEL_GUARD_DB",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", f"guard-{PROCESS}.db"),
 )
-GUARD_STATE_MAX_AGE_S = 3600.0        # older snapshots are ignored on start
+GUARD_STATE_MAX_AGE_S = 3600.0        # older persisted state is ignored on start
 DB_PATH = os.environ.get(
     "SENTINEL_DB",
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", f"sentinel-{PROCESS}.db"),
@@ -94,6 +94,14 @@ def _console_token() -> str:
 
 
 CONSOLE_TOKEN = _console_token()
+
+# Signed command envelopes (sentinel/signing.py): sources that hold a key.  Anything
+# else — a Modbus client, an unknown host — is unkeyed and its commands are unsigned.
+SIGNING_MASTER_PATH = os.environ.get(
+    "SENTINEL_SIGNING_MASTER_PATH",
+    os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data", "signing-master"),
+)
+EXTRA_SIGNING_SOURCES = set(filter(None, os.environ.get("SENTINEL_SIGNING_SOURCES", "itest,gitest").split(",")))
 WEBHOOK_URL = os.environ.get("SENTINEL_WEBHOOK_URL", "")
 TELEGRAM_BOT_TOKEN = os.environ.get("SENTINEL_TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.environ.get("SENTINEL_TELEGRAM_CHAT_ID", "")
@@ -242,6 +250,8 @@ WEIGHTS = {
     "FAULT_CLEARED": -25,
     "ALTERNATE_PATH": -25,
     "BASELINE_DEVIATION": 10,
+    "SIGNATURE_INVALID": 30,       # claims a keyed source, no or bad signature
+    "SEQUENCE_REPLAY": 40,         # valid signature, but sequence/nonce/time say replay
 }
 
 SEVERITY_BANDS = [(80, "CRITICAL"), (60, "HIGH"), (30, "MEDIUM"), (0, "LOW")]

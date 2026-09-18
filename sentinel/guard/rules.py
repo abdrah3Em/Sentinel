@@ -48,6 +48,13 @@ class RuleContext:
     def flow_active(self) -> bool:
         return bool(self.t and self.t.flow > config.FLOW_ACTIVE_LPM)
 
+    @property
+    def verification(self) -> dict:
+        """The signing verdict the engine recorded for this command (see sentinel/signing.py)."""
+        if not self.command:
+            return {}
+        return self.state.verifications.get(self.command.id, {})
+
     def pump_stop_pending(self) -> bool:
         """A pump stop commanded moments ago — the correct way to isolate a line."""
         return self.state.history.seconds_since("pump_stop", self.now_ms) < 8.0
@@ -284,11 +291,26 @@ def rule_maintenance_context(ctx: RuleContext) -> list[Finding]:
                     "Controller")]
 
 
+def rule_signature(ctx: RuleContext) -> list[Finding]:
+    """SRC-001 / CMD-001 — the envelope: a keyed source must sign, and signed traffic must be fresh."""
+    v = ctx.verification
+    if not v:
+        return []
+    if v["status"] in ("unsigned", "bad"):
+        return [Finding("SRC-001", "context", W["SIGNATURE_INVALID"], v["detail"].capitalize(), "Command source")]
+    if v["status"] == "replay":
+        return [Finding("CMD-001", "integrity", W["SEQUENCE_REPLAY"],
+                        f"Signed envelope replayed: {v['detail']}", "Command path")]
+    return []
+
+
 def rule_source(ctx: RuleContext) -> list[Finding]:
     """SRC-001 — who is issuing the command, and should they be right now?"""
     if not ctx.command:
         return []
     source = ctx.command.source
+    if ctx.verification.get("status") in ("unsigned", "bad"):
+        return []                      # rule_signature already charged for the forged identity
     if source in config.TRUSTED_SOURCES:
         return []
     if source in config.MAINTENANCE_SOURCES:
@@ -389,6 +411,7 @@ COMMAND_RULES: list[CommandRule] = [
     rule_envelope_pressure,
     rule_rapid_sequence,
     rule_unsafe_pattern,
+    rule_signature,
     rule_source,
     rule_command_replay,
     rule_telemetry_integrity,

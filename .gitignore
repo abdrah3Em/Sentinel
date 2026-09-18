@@ -4,3 +4,9 @@ data/*.db*
 logs/
 .env
 
+data/console-token
+data/signing-master
+data/*.json
+.venv/
+htmlcov/
+.coverage

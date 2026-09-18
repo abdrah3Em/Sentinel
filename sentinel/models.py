@@ -107,6 +107,11 @@ class Command:
     ts: int = field(default_factory=now_ms)
 
     def to_dict(self) -> dict[str, Any]:
+        """The wire form: a signed envelope when the source holds a key (sentinel/signing.py)."""
+        from . import signing
+        return signing.sign(asdict(self))
+
+    def to_unsigned_dict(self) -> dict[str, Any]:
         return asdict(self)
 
     @classmethod

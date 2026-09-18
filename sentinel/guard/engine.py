@@ -38,6 +38,12 @@ class CommandGuard:
         command = Command.from_dict(payload)
         self.commands_seen += 1
 
+        # Who signed it, and is it fresh?  Verified before anything else so every rule can ask.
+        self.state.verifications[command.id] = self.state.verifier.verify(payload, now)
+        if len(self.state.verifications) > 400:
+            for key in list(self.state.verifications)[:-200]:
+                del self.state.verifications[key]
+
         # History first: sequence rules must see the command they are judging.
         self.state.history.add(command)
 
@@ -114,14 +120,23 @@ class CommandGuard:
         """Everything a restart would otherwise forget: history, baselines, advisories."""
         return {
             "saved_at": time.time(),
-            "commands": [c.to_dict() for c in self.state.history.items],
+            "commands": [c.to_unsigned_dict() for c in self.state.history.items],
             "ids": list(self.state.history.ids),
             "setpoint_samples": list(self.state.setpoint_samples),
             "baseline": self.state.baseline.to_dict(),
+            "verifier": self.state.verifier.to_dict(),
+            "telemetry": self.state.telemetry.to_dict() if self.state.telemetry else None,
+            "process_alerted": {k: list(v) for k, v in self._process_alerted.items()},
             "alerts": [a.to_dict() for a in self.alerts],
             "assessments": list(self.assessments),
             "commands_seen": self.commands_seen,
         }
+
+    def blobs(self) -> dict[str, Any]:
+        """The small, frequently changing parts of the snapshot (everything but the append-only logs)."""
+        snap = self.snapshot()
+        return {k: snap[k] for k in ("ids", "setpoint_samples", "baseline", "verifier", "telemetry", "process_alerted")} \
+            | {"commands_seen": self.commands_seen}
 
     def restore(self, data: dict[str, Any]) -> None:
         from .baseline import Baseline
@@ -130,10 +145,20 @@ class CommandGuard:
         self.state.history.ids.extend(data.get("ids", []))
         self.state.setpoint_samples.extend(tuple(s) for s in data.get("setpoint_samples", []))
         self.state.baseline = Baseline.from_dict(data.get("baseline", {}))
+        from ..signing import Verifier
+        self.state.verifier = Verifier.from_dict(data.get("verifier", {}))
+        frame = data.get("telemetry")
+        if frame:
+            # The last known picture: programs, permits and switchgear positions are known
+            # before the first new frame arrives, but it is stale by definition.
+            self.state.telemetry = process.domain().Telemetry.from_dict(frame)
+            self.state.integrity.last_seq = frame.get("seq")
+            self.state.integrity.last_ts = frame.get("ts")
+        self._process_alerted = {k: (float(v[0]), str(v[1])) for k, v in (data.get("process_alerted") or {}).items()}
         for a in data.get("alerts", []):
             self.alerts.append(Alert(**a))
         self.assessments.extend(data.get("assessments", []))
-        self.commands_seen = int(data.get("commands_seen", 0))
+        self.commands_seen = int(data.get("commands_seen", self.commands_seen))
 
     def reset(self) -> None:
         """Demo housekeeping: forget history so a fresh run starts clean."""
@@ -157,7 +182,7 @@ class CommandGuard:
                            verdict: str, summary: str, now: float) -> None:
         assessment = {
             "ts": int(now * 1000),
-            "command": command.to_dict(),
+            "command": command.to_unsigned_dict(),
             "score": total,
             "verdict": verdict,
             "summary": summary,
@@ -165,6 +190,7 @@ class CommandGuard:
             "context": self._context_label(),
             "telemetry_trusted": self.state.integrity.trusted(now),
             "confidence": self.confidence(now)[0],
+            "signature": self.state.verifications.get(command.id, {}).get("status", "unknown"),
         }
         self.assessments.append(assessment)
         self.on_assessment(assessment)
